@@ -1,0 +1,57 @@
+name: Build Wii U (.wuhb)
+on:
+  push:
+    paths-ignore:
+      - 'art/refs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  wiiu:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitppc:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Wii U libraries
+        run: |
+          # the devkitppc image already ships these; the package server sometimes refuses CI runners
+          dkp-pacman -Sy --noconfirm --needed wiiu-dev wiiu-sdl2 wiiu-sdl2_image wiiu-sdl2_mixer || (sleep 30 && dkp-pacman -Sy --noconfirm --needed wiiu-dev wiiu-sdl2 wiiu-sdl2_image wiiu-sdl2_mixer) || echo "package sync failed, using libraries bundled in the image"
+          ls /opt/devkitpro/portlibs/wiiu/lib | grep -i sdl
+      - name: Configure
+        run: /opt/devkitpro/portlibs/wiiu/bin/powerpc-eabi-cmake -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: |
+          cmake --build build -j4
+          ls -la build
+      - uses: actions/upload-artifact@v4
+        # builds expire after 3 days so they don't fill the account's Actions storage;
+        # the release below (which doesn't count against that storage) is the real download
+        continue-on-error: true
+        with:
+          retention-days: 3
+          name: midnight_matinee_wiiu
+          path: |
+            build/*.wuhb
+            build/*.rpx
+      - name: Publish release (direct .wuhb download)
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Midnight Matinee (latest Wii U build)
+          body: "Copy midnight_matinee.wuhb to sd:/wiiu/apps/ and launch it from the Wii U Menu with Aroma."
+          make_latest: true
+          files: build/*.wuhb
+
+  pc-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SDL2
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev
+      - name: Build and smoke-test
+        run: |
+          cmake -B build_pc -DCMAKE_BUILD_TYPE=Release && cmake --build build_pc -j4
+          MM_HEADLESS=1 MM_FRAMES=240 MM_SCENE=level ./build_pc/midnight_matinee
