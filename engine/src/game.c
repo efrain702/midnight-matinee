@@ -1476,7 +1476,7 @@ static void update_fiend(void) {
 }
 
 /* ------------------------------------------------------------ boss: Uncle Inky */
-enum { BS_INTRO, BS_IDLE, BS_SLAM_AIM, BS_SLAM_HIT, BS_NOTES, BS_SWEEP_WARN, BS_SWEEP, BS_TICKETS, BS_DEAD };
+enum { BS_INTRO, BS_IDLE, BS_SLAM_AIM, BS_SLAM_HIT, BS_NOTES, BS_SWEEP_WARN, BS_SWEEP, BS_TICKETS, BS_DEAD, BS_WARP };
 static void boss_start(void) {
     boss.active = 1; boss.state = BS_INTRO; boss.timer = 2.6f; boss.maxhp = boss.hp = LEVELS[level_no].boss_hp; boss.face = -1;
     if (loop_no) boss.maxhp = boss.hp = boss.hp * 13 / 10;   /* second run: tougher bosses */
@@ -1511,13 +1511,22 @@ static void update_boss(void) {
     if (boss.flash > 0) boss.flash--;
     boss.timer -= DT;
     Player *t = nearest_player(boss.x, boss.y, NULL);
+    /* he turns to face you between attacks (never mid-swing, so every attack can be read) */
+    if (t && (boss.state == BS_IDLE || boss.state == BS_NOTES)) boss.face = t->x < boss.x ? -1 : 1;
     switch (boss.state) {
     case BS_INTRO: boss.pose = 0; if (boss.timer <= 0) { boss.state = BS_IDLE; boss.timer = 1.0f; } break;
     case BS_IDLE:
         boss.pose = angry < 1 ? 2 : 0;
-        if (boss.timer <= 0) {
+        if (boss.timer <= 0 && t && fabsf(t->x - boss.x) < 300 && rand() % 3 != 0) {
+            /* crowding him: he melts into an ink puddle and pours back up across the stage */
+            boss.state = BS_WARP; boss.timer = 1.0f; boss.slams = 0; sfx("splat");
+            float lo = ARENA_X + 230, hi = ARENA_X + SCREEN_W - 230;
+            boss.targetx = fabsf(t->x - lo) > fabsf(t->x - hi) ? lo : hi;
+            ink_burst(boss.x, FLOOR_Y - 20, 14, 260);
+        }
+        else if (boss.timer <= 0) {
             int pick_ = rand() % (angry < 1 ? 4 : 3);
-            if (pick_ == 0) { boss.state = BS_SLAM_AIM; boss.slams = angry < 1 ? 4 : 3; boss.timer = 0.85f * angry; boss.targetx = t ? t->x : boss.x - 400; }
+            if (pick_ == 0) { boss.state = BS_SLAM_AIM; boss.slams = angry < 1 ? 4 : 3; boss.timer = 0.85f * angry; boss.targetx = t ? t->x : boss.x + boss.face * 400; }
             else if (pick_ == 1) { boss.state = BS_NOTES; boss.timer = 0.4f; boss.slams = 3; }
             else if (pick_ == 2) { boss.state = BS_SWEEP_WARN; boss.timer = 0.9f * angry; sfx("charge"); }
             else { boss.state = BS_TICKETS; boss.timer = 2.2f; boss.slams = 0; }
@@ -1546,25 +1555,31 @@ static void update_boss(void) {
     case BS_NOTES:
         boss.pose = 0;
         if (boss.timer <= 0) {
-            float tx = t ? t->x : boss.x - 500, dx = tx - (boss.x - 120);
-            Proj *q = proj(P_NOTE, boss.x - 120, boss.y - 300, dx * (0.75f + 0.25f * boss.slams) / 1.1f, -700, 1, 1);
+            float hx = boss.x + boss.face * 120, tx = t ? t->x : boss.x + boss.face * 500, dx = tx - hx;
+            Proj *q = proj(P_NOTE, hx, boss.y - 300, dx * (0.75f + 0.25f * boss.slams) / 1.1f, -700, 1, 1);
             if (q) { q->grav = 1300; q->r = 18; q->bounces = 2; q->life = 4; }
             sfx("spit"); boss.timer = 0.45f * angry;
             if (--boss.slams <= 0) { boss.state = BS_IDLE; boss.timer = 1.4f * angry; }
         }
         break;
     case BS_SWEEP_WARN:
-        boss.pose = 0; if (boss.timer <= 0) { boss.state = BS_SWEEP; boss.sweepx = boss.x - 140; sfx("beam"); } break;
+        boss.pose = 0; if (boss.timer <= 0) { boss.state = BS_SWEEP; boss.sweepx = boss.x + boss.face * 140; sfx("beam"); } break;
     case BS_SWEEP:
-        boss.sweepx -= 760 / angry * DT;
+        boss.sweepx += boss.face * 760 / angry * DT;
         if (frame_no % 2 == 0) part(boss.sweepx, FLOOR_Y - 6, (frand() - 0.5f) * 200, -150 - frand() * 250, 0.4f, 4, 900, 255, 230, 150, 1);
         if (frame_no % 5 == 0) splat(boss.sweepx, FLOOR_Y + 2, 12, 1, 40, 26, 14);
         boss_hit_player_box(boss.sweepx, FLOOR_Y, 70, 52);
-        if (boss.sweepx < ARENA_X - 60) { boss.state = BS_IDLE; boss.timer = 1.2f * angry; }
+        if (boss.sweepx < ARENA_X - 60 || boss.sweepx > ARENA_X + SCREEN_W + 60) { boss.state = BS_IDLE; boss.timer = 1.2f * angry; }
+        break;
+    case BS_WARP:   /* 1.0 -> 0.55 sinking, 0.55 -> 0.45 puddle slides, 0.45 -> 0 rising */
+        boss.pose = 1;
+        if (boss.timer < 0.55f && !boss.slams) { boss.slams = 1; boss.x = boss.targetx; ink_burst(boss.x, FLOOR_Y - 20, 14, 260); sfx("splat"); }
+        if (frame_no % 3 == 0) splat(boss.x + (frand() - 0.5f) * 160, FLOOR_Y + 2, 14, 1, 20, 14, 24);
+        if (boss.timer <= 0) { boss.state = BS_IDLE; boss.timer = 0.5f * angry; boss.slams = 0; }
         break;
     case BS_TICKETS:
         boss.pose = 2;
-        if (frame_no % 9 == 0) { Proj *q = proj(P_TICKET, ARENA_X + 40 + frand() * (SCREEN_W - 340), -20, (frand() - 0.5f) * 60, 160, 1, 1); if (q) { q->r = 14; q->grav = 300; } }
+        if (frame_no % 9 == 0) { Proj *q = proj(P_TICKET, ARENA_X + 40 + frand() * (SCREEN_W - 80), -20, (frand() - 0.5f) * 60, 160, 1, 1); if (q) { q->r = 14; q->grav = 300; } }
         if (boss.timer <= 0) { boss.state = BS_IDLE; boss.timer = 1.2f; }
         break;
     case BS_DEAD:
@@ -1586,7 +1601,7 @@ static void update_boss(void) {
         break;
     }
     /* body contact */
-    if (boss.state != BS_DEAD && boss.state != BS_INTRO) boss_hit_player_box(boss.x, boss.y, 200, 300);
+    if (boss.state != BS_DEAD && boss.state != BS_INTRO && boss.state != BS_WARP) boss_hit_player_box(boss.x, boss.y, 200, 300);
 }
 
 
@@ -2472,7 +2487,7 @@ static void update_proj(void) {
                     enemy_damage(e, p->dmg); spark_burst(p->x, p->y, 7, 255, 240, 200);
                     if (p->type == P_FLAME) p->last_hit = j; else p->alive = 0; } }
             if (p->alive && vanity_fake_hit(p)) continue;
-            if (p->alive && boss.active && boss.state != BS_DEAD && boss.state != BS_INTRO && boss.state != SS_FLICK_OUT &&
+            if (p->alive && boss.active && boss.state != BS_DEAD && boss.state != BS_INTRO && boss.state != SS_FLICK_OUT && !(level_no == L_LOBBY && boss.state == BS_WARP) &&
                 overlap(boss.x, boss.y + boss.bob - 40, 220, 360, p->x, p->y + p->r, p->r * 2, p->r * 2)) {
                 boss.hp -= p->dmg; boss.flash = 5; spark_burst(p->x, p->y, 6, 255, 240, 200);
                 if (rand() % 3 == 0) blood_spurt(p->x, p->y, p->vx > 0 ? -1 : 1, 4, 400);
@@ -3113,17 +3128,25 @@ static void draw_boss(float ox, float oy) {
         draw_ellipse(&A.disc, tx, FLOOR_Y + oy - 34, 50, 40, 250, 248, 236, 255);
         draw_ellipse(&A.disc, tx, FLOOR_Y + oy - 34, 50, 40, 20, 20, 20, 0);
     }
-    if (boss.state == BS_SWEEP_WARN && (frame_no / 5) % 2) draw_glow(&A.disc, x - 140, y - 110, 70, 255, 240, 170, 255);
+    float hx = x + boss.face * 140;
+    if (boss.state == BS_SWEEP_WARN && (frame_no / 5) % 2) draw_glow(&A.disc, hx, y - 110, 70, 255, 240, 170, 255);
     if (boss.state == BS_SWEEP) {
         float bx = sx(boss.sweepx) + ox;
-        draw_bar(x - 140, y - 110, bx, FLOOR_Y + oy - 26, 50, 255, 240, 170, 110);
+        draw_bar(hx, y - 110, bx, FLOOR_Y + oy - 26, 50, 255, 240, 170, 110);
         draw_ellipse(&A.disc, bx, FLOOR_Y + oy - 26, 50, 26, 255, 250, 210, 220);
         draw_glow(&A.disc, bx, FLOOR_Y + oy - 26, 90, 255, 230, 150, 255);
     }
     if (boss.pose < 0) return;
     Tex *t = &A.inky[boss.pose];
     double ang = boss.state == BS_DEAD ? sinf(frame_no * 0.5f) * 6 : sinf(boss.t * 1.3f) * 2;
-    draw_sprite(t, x, y + 10, 1, 0, boss.flash ? 170 : 0, 255, ang, 1.0f + 0.02f * sinf(boss.t * 4));
+    float sy = 1.0f + 0.02f * sinf(boss.t * 4); Uint8 al = 255;
+    if (boss.state == BS_WARP) {   /* melt down into a puddle, slide, pour back up */
+        float k = boss.timer > 0.55f ? (boss.timer - 0.55f) / 0.45f : boss.timer < 0.45f ? 1 - boss.timer / 0.45f : 0;
+        draw_ellipse(&A.disc, x, FLOOR_Y + oy - 6, 130 - 50 * k, 22 - 6 * k, 14, 10, 20, 230);
+        if (k < 0.05f) return;
+        sy = k; al = (Uint8)(120 + 135 * k);
+    }
+    draw_sprite(t, x, y + 10, 1, boss.face > 0, boss.flash ? 170 : 0, al, ang, sy);
 }
 
 static void draw_hud(void) {
