@@ -4081,14 +4081,14 @@ static int draw_zone_paintings(float ox) {
     draw_painting(&zbg[z], k, ox, 255);
     return 1;
 }
-static void draw_foreground(float ox) {   /* silhouettes sliding past in front: the top band hangs down, the bottom band only peeks in */
+static void draw_foreground(float ox) {   /* silhouettes sliding past in front: only the top band, pulled up so it never hides a ledge or an enemy */
     if (!zfg.tex) return;
+    /* the painted bottom band (props along the floor) is left out on purpose: it sat right on top of the pits and floor traps */
     float w = zfg.w * ((float)SCREEN_H / zfg.h), off = -fmodf(camx * 1.3f, w);
     int half = zfg.h / 2;
     for (float x = off; x < SCREEN_W; x += w) {
-        SDL_Rect top = {0, 0, zfg.w, half}, bot = {0, half, zfg.w, zfg.h - half};
-        draw_tex_src(&zfg, &top, x + ox * 1.3f, 0, w + 1, SCREEN_H / 2.0f, 235);
-        draw_tex_src(&zfg, &bot, x + ox * 1.3f, SCREEN_H / 2.0f + 104, w + 1, SCREEN_H / 2.0f, 175);   /* low enough that pits stay readable */
+        SDL_Rect top = {0, 0, zfg.w, half};
+        draw_tex_src(&zfg, &top, x + ox * 1.3f, -100, w + 1, SCREEN_H / 2.0f, 215);   /* hangs ~2 tiles at most */
     }
 }
 static void draw_bg(float ox) {
