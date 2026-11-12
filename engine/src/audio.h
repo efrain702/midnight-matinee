@@ -8,4 +8,5 @@ void sfx(const char *name);
 void audio_quit(void);
 void audio_set_volume(int music, int sfx);   /* 0..10 each */
 void audio_duck(int on);                     /* quieter music while paused */
+int music_available(const char *name);
 #endif

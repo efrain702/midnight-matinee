@@ -49,7 +49,21 @@ PC test build: `cmake -B build_pc && cmake --build build_pc && ./build_pc/midnig
 (arrows, Z jump, X shoot, Shift aim-lock, Q/E cameras, W ping, R lights, Enter start; the GamePad screen opens in a
 second window and you can click it). Headless tests: see the top of `engine/src/main.c`.
 
-## Art
+## Art and music
 Characters, the boss and the background are Runway paintings on flat green, cut by `tools/cut_sprites.py`
-(sources in `art/refs`). Music is placeholder from The Tolling until the Suno tracks are made:
-`mm_title`, `mm_level1`, `mm_boss1`, `mm_clear`, `mm_gameover` in `engine/content/music`.
+(sources in `art/refs`).
+
+Music style: **haunted theater organ rock** (a rotting movie-palace pipe organ + rock band, made in Suno).
+Drop the .ogg files into `engine/content/music` with these names; any that are missing fall back to `mm_level1`:
+| file | where | style |
+|---|---|---|
+| `mm_title` | title screen | wheezing organ intro that kicks into the full band |
+| `mm_level1` | Lobby, Auditorium | fast organ-lead run-and-gun rock |
+| `mm_boiler` | Boiler Room | same melody over clanking metal percussion and steam |
+| `mm_backstage` | Backstage (Ink Fiend) | band drops out, lone music box plays the melody slowly |
+| `mm_booth` | Projection Booth | building tension, ticking projector rhythm, organ swells |
+| `mm_boss1` | Uncle Inky | heavy organ-metal waltz in 3/4 |
+| `mm_clear` | level clear | short triumphant organ fanfare |
+| `mm_gameover` | game over | sad organ winding down like a dying machine |
+
+The tracks in the folder now are placeholders borrowed from The Tolling.

@@ -744,6 +744,15 @@ void game_step(const Input pads[MAX_PADS], const int connected[MAX_PADS]) {
     darkness_on = power <= 0 && lit[cz] <= 0;
     if (darkness_on && !was_dark && power <= 0) { sfx("thunder"); message("POWER OUT! FIND A BREAKER", 2.0f); }
 
+    if (!boss.active) {   /* each area has its own take on the theme; missing tracks fall back to the main one */
+        static const char *ZONE_MUSIC[6] = {"mm_level1", "mm_level1", "mm_boiler", "mm_backstage", "mm_booth", "mm_level1"};
+        Player *lead = pl[0].active ? &pl[0] : &pl[1];
+        const char *want = ZONE_MUSIC[zone_of(lead->x)];
+        static int avail[6] = {-1, -1, -1, -1, -1, -1};
+        int z = zone_of(lead->x);
+        if (avail[z] < 0) avail[z] = music_available(want);
+        music_play(avail[z] ? want : "mm_level1", 1);
+    }
     for (int i = 0; i < 2; i++) update_player(&pl[i], &pads[pl[i].pad]);
     op_input(&pads[op_pad]); auto_camera();
     update_enemies(); update_fiend(); update_boss(); update_proj();

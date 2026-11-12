@@ -88,3 +88,9 @@ void audio_set_volume(int music, int sfxv) { vol_music = music; vol_sfx = sfxv; 
 void audio_duck(int on) { ducked = on; apply_volume(); }
 
 void audio_quit(void) { if (ok) Mix_CloseAudio(); }
+
+int music_available(const char *name) {   /* is music/<name>.ogg on the SD card? */
+    char rel[96]; snprintf(rel, sizeof rel, "music/%s.ogg", name);
+    SDL_RWops *f = SDL_RWFromFile(content_path(rel), "rb");
+    if (!f) return 0; SDL_RWclose(f); return 1;
+}
