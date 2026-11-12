@@ -65,10 +65,37 @@ Property, Toy Chest, Luggage Hall, Doll Hospital, then The Claim Desk.
   umbrella spikes that track you and plunge, a barrage of thrown shoes, and the sack, which drags you toward him (run
   the other way). When he's angry he calls in toy soldiers.
 
-## Level 6: Encore (the finale)
+## Level 6: Hall of Mirrors
+The stars' dressing rooms backstage. Stage Door, Wardrobe, Makeup Row, Hall of Mirrors, The Star's Dressing Room, then
+The Vanity.
+* **Mirror panes**: tall dressing-room mirrors block the way and bounce every shot straight back, yours included (a
+  bounced nail can hit you). Each hit cracks one; five and it shatters. The welding torch melts glass instead.
+* **Mannequins**: only move while you're facing away from them (or when the lights are out). Turn around and they freeze.
+* **Powder Puffs**: little winged puffs that dive at you and burst in a cloud of pink powder.
+* **Reflections**: silvered copies of your runner on the far side of an invisible mirror. They copy your steps, jump
+  when you jump and shoot when you shoot.
+* **Boss: Madame Vanity**, a vanity-table diva with a mirror for a face: lipstick rockets that steer after you, a line
+  of falling ceiling glass that sweeps the room, and a three-way split where only one of her is real (the fakes face
+  the wrong way). Shoot a fake and its shards fly at you. When she's angry she summons your reflection.
+
+## Level 7: Rooftop Marquee
+Up on the roof, in a thunderstorm, under the giant marquee sign. Fire Escape, The Rooftop, Water Towers, The Neon Sign,
+Lightning Rods, then The Marquee.
+* **Lightning strikes wherever the lights are on.** If the GamePad lights a zone, strikes land there: great for frying
+  enemies, terrible if a runner is standing in it. With the lights off, the bolts go for the lightning rods. Every
+  strike is marked a moment before it lands.
+* **Wind gusts** shove everyone back the way they came (crouch to hold on), and rain slants with the wind.
+* **Neon letters**: the giant letters of MIDNIGHT MATINEE are platforms you can stand on, but only while they're lit.
+* **Storm Crows** dive-bomb from the clouds; **Bulb Gremlins** charge up and send sparks crackling along the roof (jump
+  them); umbrella bats get blown in too.
+* **Boss: The Headliner**, the marquee sign itself come to life: it rips letters off the sign and throws them (they
+  bounce), rolls strings of hot chase-light bulbs along the roof, and calls lightning down on you. Turn the lights on
+  in its zone and the storm strikes *it* instead. When it's angry it sends in bulb gremlins.
+
+## Level 8: Encore (the finale)
 The grand finale back in the theatre, now burning and flooding with ink. Burning Lobby, The Balcony, Orchestra Pit,
 The Fly Loft, Curtain Call, then The Grand Stage.
-* Every enemy from the first five shows comes back for one last performance, plus **Understudies**: ink shadows of you
+* Enemies from the earlier shows come back for one last performance, plus **Understudies**: ink shadows of you
   that run, jump and fire nails back.
 * **The Orchestra Pit floods**: the ink rises in waves; when you see the warning, get up on the music stands.
 * **The Fly Loft** drops sandbags on ropes, and the film frames, steam vents, saws and toy blocks all return.
@@ -77,7 +104,7 @@ The Fly Loft, Curtain Call, then The Grand Stage.
   Break his porcelain face and his heart shows.
 
 ## The ending and the second show
-Beat Encore and the curtain falls... but the projector is still running. Press A for the **second show**: all six shows
+Beat Encore and the curtain falls... but the projector is still running. Press A for the **second show**: all eight shows
 again with faster, tougher enemies and bosses (the HUD says 2ND SHOW). Beat Inky Unbound again for the **true ending**.
 
 ## Gear (Ghosts 'n Goblins style)
@@ -144,12 +171,18 @@ Drop the .ogg files into `engine/content/music` with these names; any that are m
 | `mm_level5` | Lost & Found | broken-lullaby organ rock with toy piano, music box and squeaky-toy percussion |
 | `mm_dolls` | Luggage Hall, Doll Hospital | the lullaby slowed and warped: ticking clock, porcelain clinks |
 | `mm_boss5` | The Collector | frantic organ-metal toy-box lullaby with a clanging service bell |
+| `mm_level7` | Hall of Mirrors | creepy 1930s cartoon jazz waltz: detuned music box, stride piano, glassy celesta |
+| `mm_mirrors` | Hall of Mirrors, Dressing Room | minor-key big-band swing with glass harmonica and shattering-glass hits |
+| `mm_boss7` | Madame Vanity | hot-jazz horror tango: wailing clarinet and violin, castanets, distorted bass |
+| `mm_level8` | Rooftop Marquee | swing meets surf rock in a thunderstorm: twangy reverb guitar, hot-jazz horns |
+| `mm_storm` | The Neon Sign, Lightning Rods | frantic big band and tremolo surf guitar with sparking-wire synths |
+| `mm_boss8` | The Headliner | an evil showtune overture: brass fanfare, pipe organ, heavy rock, arcing synths |
 | `mm_level6` | Encore | the main theme returns, bigger: organ, brass and metal with echoes of every show |
 | `mm_finale` | Fly Loft, Curtain Call | dread build-up: heartbeat kick, music box, choir-like organ |
 | `mm_boss6` | Inky Unbound | apocalyptic organ-metal waltz of the bandleader's theme |
 | `mm_ending` | ending / credits | the theme slow and glorious, winding down as the lights go out |
 
-All twenty-four tracks were generated in Runway around one shared D-minor organ theme, with LOOPSTART tags so loops skip the intros.
+All thirty tracks were generated in Runway (the first twenty-four around one shared D-minor organ theme), with LOOPSTART tags so loops skip the intros.
 
 ## Gore and effects
 Enemies bleed oil-blood on every hit and come apart when they die: the sprite is chopped into chunks, plus painted

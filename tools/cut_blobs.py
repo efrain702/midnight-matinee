@@ -6,8 +6,9 @@ from scipy import ndimage
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import cut_sprites as c
 
-def cut_blobs(sheet, name, height, n, order=None, ref_index=0, scale=None):
-    rgba = c.key(Image.open(os.path.join(c.REF, sheet)))
+def cut_blobs(sheet, name, height, n, order=None, ref_index=0, scale=None, y0=0.0, y1=1.0, flip=False):
+    im = Image.open(os.path.join(c.REF, sheet)); W, H = im.size
+    rgba = c.key(im.crop((0, int(H * y0), W, int(H * y1))))
     m = rgba[..., 3] > 30
     m = ndimage.binary_opening(m, iterations=2)          # break hairline bridges between neighbours
     lab, k = ndimage.label(m)
@@ -28,8 +29,9 @@ def cut_blobs(sheet, name, height, n, order=None, ref_index=0, scale=None):
     s = scale or height / frames[ref_index].shape[0]
     if order: frames = [frames[i] for i in order]
     for i, f in enumerate(frames):
-        Image.fromarray(f, 'RGBA').resize((max(1, int(f.shape[1] * s)), max(1, int(f.shape[0] * s))), Image.LANCZOS) \
-             .save(os.path.join(c.OUT, 'chars', f'{name}_{i}.png'))
+        img = Image.fromarray(f, 'RGBA').resize((max(1, int(f.shape[1] * s)), max(1, int(f.shape[0] * s))), Image.LANCZOS)
+        if flip: img = img.transpose(Image.FLIP_LEFT_RIGHT)
+        img.save(os.path.join(c.OUT, 'chars', f'{name}_{i}.png'))
     print(name, len(frames), 'frames, scale', round(s, 4), 'components', k)
     return s
 
