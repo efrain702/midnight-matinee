@@ -24,13 +24,13 @@ static float signf(float v) { return v < 0 ? -1.0f : 1.0f; }
 
 /* ------------------------------------------------------------ assets */
 #define HERO_FRAMES 8
-typedef struct { Tex hero[3][HERO_FRAMES]; Tex usher[5], dog[5], blob[4], inky[3], gore[12]; Tex bg, disc, vignette, mask, grain[4]; Font font, small; } Assets;
+typedef struct { Tex hero[3][HERO_FRAMES]; Tex usher[5], dog[5], blob[4], inky[3], gore[12], goat[5], meat[5], slice[5], rat[3], gore2[12], bg2; Tex bg, disc, vignette, mask, grain[4]; Font font, small; } Assets;
 static Assets A;
 static Font padFont, padSmall; static Tex padDisc;
 
 /* ------------------------------------------------------------ level */
 static char map[LH][LW + 1];
-enum { E_USHER, E_DOG, E_BLOB, E_MINIBLOB, E_CRATE, E_HATCRATE };
+enum { E_USHER, E_DOG, E_BLOB, E_MINIBLOB, E_GOAT, E_MEATBALL, E_SLICE, E_CRATE, E_HATCRATE };
 typedef struct { int type, alive, hp, face, state, flash, onground; float x, y, vx, vy, t, timer, marked, stun, plat0, plat1, burn, btick, land; } Enemy;
 #define MAXE 96
 static Enemy en[MAXE]; static int nen;
@@ -40,8 +40,23 @@ typedef struct { int tx; float t; } Drip;
 static Drip drips[8]; static int ndrip;
 static int checkpoints[12], ncheck, cur_check;
 
-static const char *ZONE_NAME[6] = {"LOBBY", "AUDITORIUM", "BOILER ROOM", "BACKSTAGE", "PROJECTION BOOTH", "MAIN STAGE"};
-static const int ZONE_X0[7] = {0, 40, 90, 130, 175, 210, LW};
+/* ---- the shows (levels) ---- */
+typedef struct {
+    const char *title, *subtitle, *boss_name, *boss_line, *boss_music;
+    const char *zone[6]; int x0[7]; const char *music[6];
+} LevelDef;
+static const LevelDef LEVELS[] = {
+    {"OPENING NIGHT", "UNCLE INKY'S JAMBOREE PALACE", "UNCLE INKY", "THE BANDLEADER WHO NEVER LEFT", "mm_boss1",
+     {"LOBBY", "AUDITORIUM", "BOILER ROOM", "BACKSTAGE", "PROJECTION BOOTH", "MAIN STAGE"}, {0, 40, 90, 130, 175, 210, LW},
+     {"mm_level1", "mm_level1", "mm_boiler", "mm_backstage", "mm_booth", "mm_level1"}},
+    {"PIZZA PARTY", "THE JAMBOREE PIZZA PARLOR", "BIG CHEESE", "THE CHEF WHO ATE THE BIRTHDAY", "mm_boss2",
+     {"PARTY ROOM", "DINING HALL", "PIZZA COUNTER", "KITCHEN", "DELIVERY DOCK", "THE RAT'S DEN"}, {0, 40, 85, 125, 170, 210, LW},
+     {"mm_level2", "mm_level2", "mm_level2", "mm_kitchen", "mm_kitchen", "mm_level2"}},
+};
+#define NUM_LEVELS 2
+static int level_no;
+static const char *const *ZONE_NAME = LEVELS[0].zone;
+static const int *ZONE_X0 = LEVELS[0].x0;
 static int zone_of(float x) { int tx = (int)(x / TILE); for (int z = 0; z < 6; z++) if (tx < ZONE_X0[z + 1]) return z; return 5; }
 
 static void put(int x, int y, char c) { if (x >= 0 && x < LW && y >= 0 && y < LH) map[y][x] = c; }
@@ -52,7 +67,9 @@ static void spawn(int type, int tx, int row) {
     if (nen >= MAXE) return;
     Enemy *e = &en[nen++]; memset(e, 0, sizeof *e);
     e->type = type; e->alive = 1; e->x = tx * TILE + TILE / 2; e->y = row * TILE; e->face = -1;
-    e->hp = type == E_USHER ? 3 : type == E_DOG ? 4 : type == E_BLOB ? 2 : type == E_MINIBLOB ? 1 : 1;
+    e->hp = type == E_USHER ? 3 : type == E_DOG ? 4 : type == E_BLOB ? 2 : type == E_MINIBLOB ? 1 :
+            type == E_GOAT ? 4 : type == E_MEATBALL ? 3 : type == E_SLICE ? 2 : 1;
+    if (type == E_SLICE) { e->plat0 = e->y - 30; e->timer = frand() * 3; }   /* plat0 = home altitude */
     e->timer = 1.0f + frand(); e->plat0 = 0; e->plat1 = LW * TILE;
 }
 static void breaker(int tx) { if (nbreak < 8) breakers[nbreak++] = (Breaker){tx, 0}; put(tx, 11, 'B'); }
@@ -60,7 +77,13 @@ static void checkpoint(int tx) { if (ncheck < 12) checkpoints[ncheck++] = tx; pu
 static void closet(int tx) { put(tx, 11, 'C'); put(tx, 12, 'C'); }
 static void drip(int tx) { if (ndrip < 8) drips[ndrip++] = (Drip){tx, frand() * 2}; }
 
+static void build_level1(void);
+static void build_level2(void);
 static void build_level(void) {
+    ZONE_NAME = LEVELS[level_no].zone; ZONE_X0 = LEVELS[level_no].x0;
+    if (level_no == 1) build_level2(); else build_level1();
+}
+static void build_level1(void) {
     for (int y = 0; y < LH; y++) { memset(map[y], '.', LW); map[y][LW] = 0; }
     nen = nbreak = ndrip = ncheck = 0;
     block(0, LW - 1, 13, 14);
@@ -115,9 +138,56 @@ static void build_level(void) {
     }
 }
 
-static int solid_at(int tx, int ty) { if (tx < 0 || tx >= LW) return 1; if (ty < 0 || ty >= LH) return 0; return map[ty][tx] == '#'; }
+
+/* SHOW 2: PIZZA PARTY. '>' '<' conveyor belts, 'O' brick ovens that blast fire, pits are hot cheese */
+static void conveyor(int x0, int x1, int y, char dir) { for (int x = x0; x <= x1; x++) put(x, y, dir); }
+static void oven(int x0, int y) { for (int x = x0; x < x0 + 2; x++) for (int yy = y; yy <= 12; yy++) put(x, yy, 'O'); }
+static void build_level2(void) {
+    for (int y = 0; y < LH; y++) { memset(map[y], '.', LW); map[y][LW] = 0; }
+    nen = nbreak = ndrip = ncheck = 0;
+    block(0, LW - 1, 13, 14);
+    block(0, 0, 0, 12); block(LW - 1, LW - 1, 0, 12);
+    /* PARTY ROOM: long party tables, a goat band and swooping pizza bats */
+    checkpoint(2);
+    plat(8, 14, 10); spawn(E_CRATE, 11, 10);
+    spawn(E_GOAT, 19, 13); spawn(E_SLICE, 24, 7);
+    plat(26, 32, 10); spawn(E_SLICE, 33, 6); spawn(E_GOAT, 36, 13);
+    breaker(30);
+    /* DINING HALL: hot cheese pits and rolling meatballs */
+    checkpoint(41);
+    spawn(E_MEATBALL, 50, 13); pit(54, 56); plat(53, 57, 10);
+    spawn(E_SLICE, 60, 7); block(62, 64, 12, 12); spawn(E_MEATBALL, 68, 13);
+    pit(71, 73); spawn(E_GOAT, 77, 13); plat(78, 82, 10); spawn(E_HATCRATE, 80, 10);
+    /* PIZZA COUNTER: climb the counter, goats on top */
+    checkpoint(86);
+    block(92, 103, 11, 12); spawn(E_GOAT, 98, 11); spawn(E_SLICE, 96, 6);
+    plat(105, 109, 9); spawn(E_MEATBALL, 112, 13); spawn(E_CRATE, 107, 9);
+    block(114, 116, 12, 12); spawn(E_SLICE, 119, 7); breaker(121);
+    /* KITCHEN: fire ovens and conveyor belts */
+    checkpoint(126);
+    oven(131, 11); conveyor(134, 140, 12, '>'); oven(142, 11); spawn(E_MEATBALL, 138, 12);
+    spawn(E_SLICE, 145, 7); conveyor(147, 153, 12, '<'); oven(155, 11); spawn(E_GOAT, 151, 12);
+    pit(158, 160); plat(157, 161, 10); oven(163, 11); spawn(E_CRATE, 166, 13); breaker(167);
+    /* DELIVERY DOCK: conveyors over a cheese vat */
+    checkpoint(171);
+    pit(176, 196); conveyor(175, 181, 11, '>'); conveyor(184, 189, 10, '<'); conveyor(192, 197, 11, '>');
+    spawn(E_SLICE, 183, 6); spawn(E_SLICE, 191, 5); spawn(E_GOAT, 201, 13); spawn(E_MEATBALL, 205, 13);
+    breaker(203);
+    /* THE RAT'S DEN (boss) */
+    checkpoint(209);
+    for (int i = 0; i < nen; i++) en[i].plat1 = LW * TILE;
+}
+static int solid_at(int tx, int ty) { if (tx < 0 || tx >= LW) return 1; if (ty < 0 || ty >= LH) return 0; char c = map[ty][tx]; return c == '#' || c == 'O' || c == '>' || c == '<'; }
 static int oneway_at(int tx, int ty) { if (tx < 0 || tx >= LW || ty < 0 || ty >= LH) return 0; return map[ty][tx] == '='; }
 
+static int move_box(float *x, float *y, float *vx, float *vy, float w, float h, int drop);
+/* standing on a conveyor belt: it carries you along */
+static void conveyor_carry(float *x, float *y, float w, float h) {
+    int tx = (int)(*x / TILE), ty = (int)((*y + 2) / TILE);
+    if (tx < 0 || tx >= LW || ty < 0 || ty >= LH) return;
+    char c = map[ty][tx]; if (c != '>' && c != '<') return;
+    float cv = c == '>' ? 150 : -150, vy0 = 0; move_box(x, y, &cv, &vy0, w, h, 0);
+}
 /* x = centre, y = feet. returns 1 = landed, 2 = hit a wall */
 static int move_box(float *x, float *y, float *vx, float *vy, float w, float h, int drop) {
     int res = 0;
@@ -156,7 +226,7 @@ static int op_pad;          /* who runs the cameras */
 static int score;
 
 /* projectiles */
-enum { P_NAIL, P_RIVET, P_FLAME, P_PLUNGER, P_LIGHT, P_NOTE, P_TICKET, P_DRIP };
+enum { P_NAIL, P_RIVET, P_FLAME, P_PLUNGER, P_LIGHT, P_NOTE, P_TICKET, P_DRIP, P_CONFETTI, P_PIZZA, P_CHEESE };
 typedef struct { int type, alive, enemy, dmg, bounces, last_hit; float x, y, vx, vy, life, grav, r; } Proj;
 #define MAXP 160
 static Proj pr[MAXP];
@@ -180,8 +250,8 @@ static float scene_t, ping_cool, op_idle;
 static struct { int state; float x, y, t, cycle; int seen; } fiend;   /* 0 asleep, 1 warning, 2 hunting, 3 retreating */
 /* boss */
 static struct {
-    int active, state, hp, maxhp, pose, flash, slams, intro, dead, summoned;
-    float x, y, t, timer, targetx, sweepx, bob;
+    int active, state, hp, maxhp, pose, flash, slams, intro, dead, summoned, face;
+    float x, y, t, timer, targetx, sweepx, bob, vy;
 } boss;
 static int arena_locked;
 
@@ -229,6 +299,11 @@ static void gib(Tex *t, SDL_Rect src, float x, float y, float vx, float vy, floa
     if (!t || !t->tex) return;
     Gib *g = &gibs[gib_next]; gib_next = (gib_next + 1) % MAXGIB;
     *g = (Gib){t, src, x, y, vx, vy, frand() * 360, (frand() - 0.5f) * 1100, 6.0f + frand() * 2, w, h, flip, bleed, 0};
+}
+static void gore_part2(int idx, float x, float y, float spd, int bleed) {
+    Tex *t = &A.gore2[idx]; if (!t->tex) return;
+    float a = -1.57f + (frand() - 0.5f) * 2.4f, v = spd * (0.5f + frand());
+    gib(t, (SDL_Rect){0, 0, t->w, t->h}, x, y, cosf(a) * v, sinf(a) * v, (float)t->w, (float)t->h, rand() & 1, bleed);
 }
 static void gore_part(int idx, float x, float y, float spd, int bleed) {
     Tex *t = &A.gore[idx]; if (!t->tex) return;
@@ -289,8 +364,8 @@ static void start_level(void) {
     if (mode == 1) { pl[0].pad = 1; op_pad = 0; } else { pl[0].pad = 0; op_pad = 0; }
     pl[1].active = 0;
     camx = 0; scene = SC_PLAY; scene_t = 0;
-    message("OPENING NIGHT", 2.5f);
-    music_play("mm_level1", 1);
+    { char b[64]; snprintf(b, sizeof b, "SHOW %d: %s", level_no + 1, LEVELS[level_no].title); message(b, 2.5f); }
+    music_play(LEVELS[level_no].music[0], 1);
 }
 
 static void hurt_player(Player *p, float from_x) {
@@ -344,6 +419,14 @@ void game_init(void) {
         if (i < 4) { snprintf(rel, sizeof rel, "chars/blob_%d.png", i); A.blob[i] = load_or_empty(rel); if (!A.blob[i].tex && i) A.blob[i] = A.blob[i % 2]; }
     }
     for (int i = 0; i < 12; i++) { snprintf(rel, sizeof rel, "chars/gore_%d.png", i); A.gore[i] = load_or_empty(rel); }
+    for (int i = 0; i < 12; i++) { snprintf(rel, sizeof rel, "chars/gore2_%d.png", i); A.gore2[i] = load_or_empty(rel); if (!A.gore2[i].tex) A.gore2[i] = A.gore[i]; }
+    for (int i = 0; i < 5; i++) {
+        snprintf(rel, sizeof rel, "chars/goat_%d.png", i); A.goat[i] = load_or_empty(rel); if (!A.goat[i].tex && i) A.goat[i] = A.goat[0];
+        snprintf(rel, sizeof rel, "chars/meat_%d.png", i); A.meat[i] = load_or_empty(rel); if (!A.meat[i].tex && i) A.meat[i] = A.meat[0];
+        snprintf(rel, sizeof rel, "chars/slice_%d.png", i); A.slice[i] = load_or_empty(rel); if (!A.slice[i].tex && i) A.slice[i] = A.slice[0];
+    }
+    for (int i = 0; i < 3; i++) { snprintf(rel, sizeof rel, "chars/rat_%d.png", i); A.rat[i] = load_or_empty(rel); }
+    A.bg2 = load_or_empty("bg/pizza.jpg");
     for (int i = 0; i < 3; i++) { snprintf(rel, sizeof rel, "chars/inky_%d.png", i); A.inky[i] = load_or_empty(rel); }
     A.bg = load_or_empty("bg/theater.jpg");
     for (int i = 0; i < 4; i++) { snprintf(rel, sizeof rel, "ui/grain%d.png", i); A.grain[i] = load_or_empty(rel); }
@@ -358,6 +441,13 @@ int game_wants_quit(void) { return quit_req; }
 
 void game_goto(const char *name) {
     if (!strcmp(name, "title")) { scene = SC_TITLE; return; }
+    if (!strncmp(name, "level2", 6) || !strcmp(name, "boss2") || !strcmp(name, "kitchen") || !strcmp(name, "dock")) {
+        level_no = 1; start_level();
+        if (!strcmp(name, "boss2")) { cur_check = ncheck - 1; reset_player(&pl[0], 0); }
+        if (!strcmp(name, "kitchen")) { cur_check = 3; reset_player(&pl[0], 0); }
+        if (!strcmp(name, "dock")) { cur_check = 4; reset_player(&pl[0], 0); }
+        return;
+    }
     start_level();
     if (!strcmp(name, "boss")) { cur_check = ncheck - 1; reset_player(&pl[0], 0); }
     if (!strcmp(name, "fiend")) { cur_check = 3; reset_player(&pl[0], 0); }
@@ -452,6 +542,7 @@ static void update_player(Player *p, const Input *in) {
     float w = 46, hh = p->crouch ? 80 : 124;
     int r = move_box(&p->x, &p->y, &p->vx, &p->vy, w, hh, drop);
     p->onground = (r & 1) != 0;
+    if (p->onground) conveyor_carry(&p->x, &p->y, w, hh);
     if (arena_locked) p->x = clampf(p->x, ARENA_X + 30, ARENA_X + SCREEN_W - 30);
     p->x = clampf(p->x, 30, LW * TILE - 30);
     if (p->vx != 0 && p->onground) p->anim += DT * fabsf(p->vx) / 340; else p->anim = 0;
@@ -487,6 +578,9 @@ static void enemy_box(Enemy *e, float *w, float *h) {
     case E_DOG: *w = 92; *h = 112; break;
     case E_BLOB: *w = 64; *h = 60; break;
     case E_MINIBLOB: *w = 40; *h = 38; break;
+    case E_GOAT: *w = 64; *h = 150; break;
+    case E_MEATBALL: *w = 72; *h = 70; break;
+    case E_SLICE: *w = 76; *h = 54; break;
     default: *w = 56; *h = 48; break;
     }
 }
@@ -496,6 +590,9 @@ static Tex *enemy_tex(Enemy *e) {
     case E_USHER: return &A.usher[e->state == 1 ? 4 : (fabsf(e->vx) > 5 ? walk : 0)];
     case E_DOG: return &A.dog[e->state >= 1 ? 4 : walk];
     case E_BLOB: case E_MINIBLOB: return &A.blob[!e->onground ? 2 : e->land > 0 ? 3 : e->timer < 0.25f ? 1 : 0];
+    case E_GOAT: return &A.goat[e->state == 1 ? 4 : (fabsf(e->vx) > 5 ? walk : 0)];
+    case E_MEATBALL: return &A.meat[e->state == 1 ? 4 : ((int)(e->t * 10)) % 4];
+    case E_SLICE: return &A.slice[e->state == 1 ? 4 : ((int)(e->t * 10)) % 4];
     }
     return NULL;
 }
@@ -517,6 +614,25 @@ static void gore_enemy(Enemy *e) {
         gore_part(7, cx, cy, 500, 0); gore_part(5, cx, cy, 460, 1); gore_part(3, cx, cy - 20, 580, 1);
         blood_spurt(cx, cy, -e->face, 26, 560); spark_burst(cx, cy, 24, 255, 210, 110); smoke(cx, cy, 8, 70);
         ring(cx, cy, 110, 255, 220, 150); sfx("boom"); sfx("clank");
+        break;
+    case E_GOAT:    /* party goat: horns, accordion keys and party hat everywhere */
+        sfx("clank"); shatter(t, e->x, e->y, e->face > 0, 3, 4, 420, 1);
+        gore_part2(0, cx, cy - 70, 560, 0); gore_part2(0, cx, cy - 70, 520, 0); gore_part2(1, cx, cy, 500, 0); gore_part2(1, cx, cy, 460, 0);
+        gore_part2(2, cx, cy - 80, 600, 0); gore_part2(3, cx, cy - 60, 580, 1); gore_part2(10, cx, cy, 480, 0);
+        blood_spurt(cx, cy - 40, -e->face, 36, 600);
+        for (int i = 0; i < 24; i++) part(cx, cy - 40, (frand() - 0.5f) * 700, -200 - frand() * 500, 1.2f, 4, 900, 120 + rand() % 136, 80 + rand() % 176, 80 + rand() % 176, 0);   /* confetti */
+        break;
+    case E_MEATBALL: /* meatball: chunks and sauce */
+        sfx("splat"); shatter(t, e->x, e->y, e->face > 0, 3, 3, 380, 1);
+        for (int k = 0; k < 4; k++) gore_part2(4, cx, cy, 520, 1);
+        gore_part2(3, cx, cy, 560, 1);
+        for (int i = 0; i < 30; i++) { float a = frand() * 6.283f, v = 200 + frand() * 450;
+            part_k(PK_BLOOD, cx, cy, cosf(a) * v, sinf(a) * v - 250, 1.4f, 4 + frand() * 7, 1500, 170 + rand() % 40, 20, 14, 0); }
+        break;
+    case E_SLICE:   /* pizza bat: pepperoni, wings, cheese */
+        sfx("splat"); shatter(t, e->x, e->y, e->face > 0, 3, 2, 360, 0);
+        gore_part2(6, cx, cy, 500, 0); gore_part2(6, cx, cy, 460, 0); gore_part2(7, cx, cy, 520, 0); gore_part2(7, cx, cy, 480, 0); gore_part2(5, cx, cy, 440, 0);
+        blood_spurt(cx, cy, -e->face, 14, 450);
         break;
     default:        /* ink blob: bursts into a big ink splash that paints the room */
         sfx("splat");
@@ -568,6 +684,24 @@ static void update_enemies(void) {
         float w, h; enemy_box(e, &w, &h);
         float dist; Player *t = nearest_player(e->x, e->y, &dist);
         e->t += DT * speed_k;
+        if (e->type == E_SLICE) {   /* flies: bob around home, then dive-bomb */
+            if (e->state == 0) {
+                e->face = t && t->x < e->x ? -1 : 1;
+                float hx = t ? t->x - e->face * 220 : e->x;
+                e->vx += ((hx - e->x) * 1.2f - e->vx) * 2 * DT; e->vx = clampf(e->vx, -200, 200);
+                e->y = e->plat0 + sinf(e->t * 3) * 26;
+                e->timer -= DT * speed_k;
+                if (t && dist < 520 && e->timer <= 0) { e->state = 1; float dx = t->x - e->x, dy = (t->y - 70) - e->y, l = sqrtf(dx * dx + dy * dy) + 1;
+                    e->vx = dx / l * 480 * speed_k; e->vy = dy / l * 480 * speed_k; sfx("spit"); }
+            } else {
+                e->vy -= 300 * DT;   /* pull out of the dive */
+                if (e->y < e->plat0 && e->vy < 0) { e->state = 0; e->vy = 0; e->timer = 1.6f + frand(); }
+            }
+            e->x += e->vx * DT; if (e->state == 1) e->y += e->vy * DT;
+            if (e->y > FLOOR_Y - 20) { e->y = FLOOR_Y - 20; e->vy = -300; }
+            for (int k = 0; k < 2; k++) { Player *p = &pl[k]; if (p->active && p->alive && !p->hidden && overlap(p->x, p->y, 40, 110, e->x, e->y, 60, 46)) hurt_player(p, e->x); }
+            continue;
+        }
         switch (e->type) {
         case E_USHER:
             if (t && dist < 760) e->face = t->x < e->x ? -1 : 1;
@@ -607,6 +741,31 @@ static void update_enemies(void) {
                 if (e->timer <= 0) { e->state = 0; e->timer = 2.0f; e->vx = e->face * 90; }
             }
             break;
+        case E_GOAT:   /* like the usherettes, but the accordion fires a fan of confetti bombs */
+            if (t && dist < 760) e->face = t->x < e->x ? -1 : 1;
+            if (e->state == 0) {
+                e->vx = (t && dist < 760 && fabsf(t->x - e->x) > 160) ? e->face * 85 * speed_k : 0;
+                e->timer -= DT * speed_k;
+                if (e->timer <= 0 && t && dist < 700) { e->state = 1; e->timer = 0.55f; e->vx = 0; }
+            } else {
+                e->timer -= DT * speed_k;
+                if (e->timer <= 0) {
+                    for (int k = 0; k < 3; k++) { Proj *q = proj(P_CONFETTI, e->x + e->face * 40, e->y - 90, e->face * (220 + k * 120), -420 - k * 60, 1, 1); if (q) { q->grav = 1100; q->r = 11; } }
+                    sfx("boing"); e->state = 0; e->timer = 2.6f + frand();
+                }
+            }
+            break;
+        case E_MEATBALL:   /* rolls at you, then pounces */
+            if (t && dist < 900) {
+                if (e->state == 0) {
+                    e->face = t->x < e->x ? -1 : 1;
+                    float target = e->face * 230 * speed_k; e->vx += (target - e->vx) * 2.5f * DT;
+                    if (e->onground && fabsf(t->x - e->x) < 170 && e->timer <= 0) { e->state = 1; e->vy = -520; e->vx = e->face * 260; e->timer = 1.4f; }
+                } else if (e->onground && e->vy >= 0) e->state = 0;
+            }
+            e->timer -= DT;
+            if (e->onground && frame_no % 6 == 0 && fabsf(e->vx) > 60) part_k(PK_BLOOD, e->x, e->y - 6, -e->vx * 0.3f, -80, 0.5f, 3, 1200, 160, 20, 14, 0);
+            break;
         case E_BLOB: case E_MINIBLOB:
             e->timer -= DT * speed_k;
             if (e->onground) { e->vx *= 0.85f; if (e->timer <= 0 && t && dist < 800) {
@@ -620,7 +779,8 @@ static void update_enemies(void) {
         e->onground = (r & 1) != 0;
         if (!was_ground && e->onground && (e->type == E_BLOB || e->type == E_MINIBLOB)) { e->land = 0.18f; part_k(PK_BLOOD, e->x, e->y - 6, -80, -120, 0.6f, 4, 1200, 12, 8, 12, 0); part_k(PK_BLOOD, e->x, e->y - 6, 80, -120, 0.6f, 4, 1200, 12, 8, 12, 0); }
         if (e->land > 0) e->land -= DT;
-        if ((r & 2) && e->type == E_DOG) e->vx = -e->vx;
+        if ((r & 2) && (e->type == E_DOG || e->type == E_MEATBALL)) e->vx = -e->vx * 0.8f;
+        conveyor_carry(&e->x, &e->y, w, h);
         if (e->y > FLOOR_Y + 40) { e->alive = 0; ink_burst(e->x, FLOOR_Y, 10, 200); continue; }
         if (e->type != E_CRATE && e->type != E_HATCRATE)
             for (int k = 0; k < 2; k++) { Player *p = &pl[k]; if (p->active && p->alive && !p->hidden && overlap(p->x, p->y, 40, 110, e->x, e->y, w * 0.8f, h * 0.85f)) hurt_player(p, e->x); }
@@ -631,9 +791,29 @@ static void update_enemies(void) {
     }
 }
 
+
+/* brick ovens: every few seconds a fire column roars up out of the top. The security office's LIGHTS
+   (which also kicks the kitchen breakers) shut the ovens off in that zone */
+static float oven_phase(int tx) { return fmodf(scene_t + tx * 0.37f, 3.4f); }
+static int oven_burning(int tx) { return lit[zone_of(tx * TILE)] <= 0 && oven_phase(tx) < 1.1f; }
+static void update_ovens(void) {
+    int t0 = (int)(camx / TILE) - 2, t1 = t0 + SCREEN_W / TILE + 4;
+    for (int tx = t0; tx <= t1; tx++) { if (tx < 1 || tx >= LW) continue;
+        for (int ty = 1; ty < LH; ty++) { if (map[ty][tx] != 'O' || map[ty - 1][tx] == 'O' || map[ty][tx - 1] == 'O') continue;
+            if (!oven_burning(tx)) break;
+            float fx = tx * TILE + TILE, top = ty * TILE;
+            if (oven_phase(tx) < 0.05f) sfx("sizzle");
+            if (frame_no % 2 == 0) { part(fx + (frand() - 0.5f) * 60, top - frand() * 150, (frand() - 0.5f) * 60, -260, 0.3f, 12, -200, 255, 140 + rand() % 80, 40, 1); }
+            if (frame_no % 5 == 0) smoke(fx, top - 160, 1, 60);
+            for (int k = 0; k < 2; k++) { Player *p = &pl[k]; if (p->active && p->alive && !p->hidden && overlap(p->x, p->y, 40, 120, fx, top, 80, 170)) hurt_player(p, fx); }
+            break;
+        }
+    }
+}
 /* ------------------------------------------------------------ the Ink Fiend (backstage) */
 static int any_player_in_zone(int z) { for (int i = 0; i < 2; i++) if (pl[i].active && pl[i].alive && zone_of(pl[i].x) == z) return 1; return 0; }
 static void update_fiend(void) {
+    if (level_no != 0) return;   /* the Ink Fiend lives backstage in Show 1 */
     int in_zone = any_player_in_zone(3);
     if (fiend.state == 0) {
         if (!in_zone) return;
@@ -668,19 +848,21 @@ static void update_fiend(void) {
 /* ------------------------------------------------------------ boss: Uncle Inky */
 enum { BS_INTRO, BS_IDLE, BS_SLAM_AIM, BS_SLAM_HIT, BS_NOTES, BS_SWEEP_WARN, BS_SWEEP, BS_TICKETS, BS_DEAD };
 static void boss_start(void) {
-    boss.active = 1; boss.state = BS_INTRO; boss.timer = 2.6f; boss.maxhp = boss.hp = 110;
+    boss.active = 1; boss.state = BS_INTRO; boss.timer = 2.6f; boss.maxhp = boss.hp = level_no == 1 ? 140 : 110; boss.face = -1;
     if (getenv("MM_BOSS_HP")) boss.hp = atoi(getenv("MM_BOSS_HP"));   /* tests */
     boss.x = ARENA_X + SCREEN_W - 230; boss.y = FLOOR_Y;
-    arena_locked = 1; music_play("mm_boss1", 1); sfx("roar1"); shake = 10;
+    arena_locked = 1; music_play(LEVELS[level_no].boss_music, 1); sfx(level_no == 1 ? "angry" : "roar1"); shake = 10;
 }
 static void boss_hit_player_box(float x, float y, float w, float h) {
     for (int k = 0; k < 2; k++) { Player *p = &pl[k]; if (p->active && p->alive && overlap(p->x, p->y, 40, p->crouch ? 80 : 120, x, y, w, h)) hurt_player(p, x); }
 }
+static void update_boss_rat(void);
 static void update_boss(void) {
     if (!boss.active) {
         if (!arena_locked) for (int k = 0; k < 2; k++) if (pl[k].active && pl[k].alive && pl[k].x > ARENA_X + 150) boss_start();
         return;
     }
+    if (level_no == 1) { update_boss_rat(); return; }
     float angry = boss.hp < boss.maxhp / 2 ? 0.7f : 1.0f;
     boss.t += DT; boss.bob = sinf(boss.t * 2.2f) * 10;
     if (boss.flash > 0) boss.flash--;
@@ -764,6 +946,115 @@ static void update_boss(void) {
     if (boss.state != BS_DEAD && boss.state != BS_INTRO) boss_hit_player_box(boss.x, boss.y, 200, 300);
 }
 
+
+static float sx(float x);
+static void draw_sprite(Tex *t, float x, float feet, float scale, int face_right, Uint8 flash, Uint8 alpha, double angle, float sy);
+/* ---- Show 2 boss: BIG CHEESE, the rat chef ---- */
+enum { RS_CHOP_AIM = 20, RS_CHOP, RS_PIZZA, RS_WAVE_WARN, RS_WAVE, RS_LEAP, RS_FALL };
+static void update_boss_rat(void) {
+    float angry = boss.hp < boss.maxhp / 2 ? 0.7f : 1.0f;
+    boss.t += DT; if (boss.flash > 0) boss.flash--;
+    boss.timer -= DT;
+    Player *t = nearest_player(boss.x, boss.y, NULL);
+    float lo = ARENA_X + 220, hi = ARENA_X + SCREEN_W - 180;
+    if (t && boss.state != RS_LEAP && boss.state != RS_FALL && boss.state != BS_DEAD) boss.face = t->x < boss.x ? -1 : 1;
+    switch (boss.state) {
+    case BS_INTRO: boss.pose = 0; if (boss.timer <= 0) { boss.state = BS_IDLE; boss.timer = 1.0f; } break;
+    case BS_IDLE:
+        boss.pose = angry < 1 ? 2 : 0; boss.bob = fabsf(sinf(boss.t * 6)) * -10;
+        if (t) { float want = t->x - boss.face * 380; boss.x += clampf(want - boss.x, -1, 1) * 110 / angry * DT; }
+        boss.x = clampf(boss.x, lo, hi);
+        if (boss.timer <= 0) {
+            int pick_ = rand() % (angry < 1 ? 4 : 3);
+            if (pick_ == 0) { boss.state = RS_CHOP_AIM; boss.slams = angry < 1 ? 3 : 2; boss.timer = 0.8f * angry; boss.targetx = t ? t->x : boss.x; }
+            else if (pick_ == 1) { boss.state = RS_PIZZA; boss.slams = 3; boss.timer = 0.3f; }
+            else if (pick_ == 2) { boss.state = RS_WAVE_WARN; boss.timer = 0.8f * angry; sfx("charge"); }
+            else { boss.state = RS_LEAP; boss.vy = -1500; sfx("jump"); }
+            if (angry < 1 && !boss.summoned) { boss.summoned = 1; spawn(E_MEATBALL, (int)((ARENA_X + 200) / TILE), 13); spawn(E_MEATBALL, (int)((ARENA_X + 900) / TILE), 13); sfx("summon"); }
+        }
+        break;
+    case RS_CHOP_AIM:   /* a cleaver shadow tracks you, then commits */
+        boss.pose = 1;
+        if (boss.timer > 0.28f && t) boss.targetx += (t->x - boss.targetx) * 0.09f;
+        if (boss.timer <= 0) { boss.state = RS_CHOP; boss.timer = 0.3f; shake = 14; hitstop = 2; sfx("slam");
+            ring(boss.targetx, FLOOR_Y - 10, 150, 255, 230, 190); spark_burst(boss.targetx, FLOOR_Y - 10, 20, 255, 240, 200);
+            for (int k = 0; k < 8; k++) part_k(PK_DEBRIS, boss.targetx, FLOOR_Y - 8, (frand() - 0.5f) * 700, -300 - frand() * 500, 2.0f, 8 + frand() * 10, 1700, 110, 70, 40, 0); }
+        break;
+    case RS_CHOP:
+        boss.pose = 1; boss_hit_player_box(boss.targetx, FLOOR_Y, 110, FLOOR_Y);
+        if (boss.timer <= 0) { if (--boss.slams > 0) { boss.state = RS_CHOP_AIM; boss.timer = 0.55f * angry; boss.targetx = t ? t->x : boss.targetx; }
+            else { boss.state = BS_IDLE; boss.timer = 1.3f * angry; } }
+        break;
+    case RS_PIZZA:      /* flings pizzas that bounce along the floor */
+        boss.pose = 0;
+        if (boss.timer <= 0) {
+            Proj *q = proj(P_PIZZA, boss.x + boss.face * 120, boss.y - 260, boss.face * (330 + 70 * boss.slams), -520, 1, 1);
+            if (q) { q->grav = 1400; q->r = 26; q->bounces = 4; q->life = 4; }
+            sfx("boing"); boss.timer = 0.5f * angry;
+            if (--boss.slams <= 0) { boss.state = BS_IDLE; boss.timer = 1.2f * angry; }
+        }
+        break;
+    case RS_WAVE_WARN: boss.pose = 1; if (boss.timer <= 0) { boss.state = RS_WAVE; boss.sweepx = boss.x + boss.face * 120; sfx("splash"); shake = 8; } break;
+    case RS_WAVE:       /* a wave of hot cheese rolls across the floor: jump it */
+        boss.sweepx += boss.face * 700 / angry * DT;
+        boss_hit_player_box(boss.sweepx, FLOOR_Y, 80, 64);
+        if (frame_no % 2 == 0) part_k(PK_BLOOD, boss.sweepx, FLOOR_Y - 30, (frand() - 0.5f) * 200, -200 - frand() * 200, 0.8f, 6, 1200, 250, 190, 60, 0);
+        if (boss.sweepx < ARENA_X - 60 || boss.sweepx > ARENA_X + SCREEN_W + 60) { boss.state = BS_IDLE; boss.timer = 1.1f * angry; }
+        break;
+    case RS_LEAP:       /* jumps off the top of the screen... */
+        boss.pose = 2; boss.vy += 1800 * DT; boss.y += boss.vy * DT;
+        if (boss.y < -200) { boss.state = RS_FALL; boss.timer = 1.0f; boss.targetx = t ? t->x : boss.x; boss.vy = 0; }
+        break;
+    case RS_FALL:       /* ...and crashes down where you were standing */
+        boss.pose = 2;
+        if (boss.timer > 0.25f && t) boss.targetx += (t->x - boss.targetx) * 0.06f;
+        if (boss.timer <= 0) {
+            boss.x = clampf(boss.targetx, lo, hi); boss.vy += 3200 * DT; boss.y += boss.vy * DT;
+            if (boss.y >= FLOOR_Y) { boss.y = FLOOR_Y; boss.state = BS_IDLE; boss.timer = 1.4f; shake = 20; hitstop = 4; sfx("slam"); sfx("boom");
+                ring(boss.x, FLOOR_Y - 10, 260, 255, 220, 160); smoke(boss.x, FLOOR_Y - 10, 8, 80);
+                boss_hit_player_box(boss.x, FLOOR_Y, 260, 300);
+                for (int k = 0; k < 2; k++) { Player *p = &pl[k]; if (p->active && p->alive && p->onground && fabsf(p->x - boss.x) < 520) hurt_player(p, boss.x); }  /* shockwave: be in the air */
+            }
+        }
+        break;
+    case BS_DEAD:
+        if (boss.pose >= 0) boss.pose = 2;
+        if (frame_no % 4 == 0) { sfx("boom"); blood_spurt(boss.x + (frand() - 0.5f) * 200, boss.y - frand() * 300, frand() < 0.5f ? -1 : 1, 10, 700);
+            gore_part2(rand() % 12, boss.x + (frand() - 0.5f) * 200, boss.y - 100 - frand() * 250, 700, rand() & 1);
+            for (int k = 0; k < 6; k++) part_k(PK_BLOOD, boss.x, boss.y - 200, (frand() - 0.5f) * 800, -300 - frand() * 500, 1.4f, 6, 1500, 250, 190, 60, 0); }
+        if (!boss.summoned && boss.timer < 1.0f) {
+            boss.summoned = 1; shatter(&A.rat[2], boss.x, boss.y + 10, boss.face > 0, 5, 5, 800, 1); boss.pose = -1;
+            for (int k = 0; k < 6; k++) gore_part2(11, boss.x, boss.y - 200, 800, 1);
+            gore_part2(3, boss.x - 20, boss.y - 330, 900, 1); gore_part2(3, boss.x + 20, boss.y - 330, 900, 1);
+            blood_spurt(boss.x, boss.y - 250, -1, 60, 900); blood_spurt(boss.x, boss.y - 250, 1, 40, 800);
+            ring(boss.x, boss.y - 200, 300, 255, 220, 160); shake = 24; hitstop = 10;
+        }
+        if (boss.timer <= 0 && scene == SC_PLAY) { scene = SC_CLEAR; scene_t = 0; music_play("mm_clear", 0); }
+        break;
+    }
+    if (boss.state != BS_DEAD && boss.state != BS_INTRO && boss.state != RS_LEAP && boss.state != RS_FALL) boss_hit_player_box(boss.x, boss.y, 190, 300);
+}
+static void draw_boss_rat(float ox, float oy) {
+    float x = sx(boss.x) + ox, y = boss.y + oy + boss.bob;
+    if (boss.state == RS_CHOP_AIM) { float k = 1 - boss.timer / 0.8f, tx = sx(boss.targetx) + ox;
+        draw_ellipse(&A.disc, tx, FLOOR_Y + oy, 40 + 30 * k, 9 + 6 * k, 10, 6, 10, (Uint8)(120 + 120 * k));
+        if ((frame_no / 4) % 2) draw_text_col(&A.small, "!", tx, FLOOR_Y + oy - 60, 0.8f, 1, 255, 60, 40, 255); }
+    if (boss.state == RS_CHOP) { float tx = sx(boss.targetx) + ox;   /* a giant cleaver blade */
+        fill_rect((int)tx - 55, 0, 110, FLOOR_Y + (int)oy - 10, 40, 36, 40, 255);
+        fill_rect((int)tx - 50, 0, 100, FLOOR_Y + (int)oy - 16, 190, 196, 205, 255);
+        fill_rect((int)tx - 50, FLOOR_Y + (int)oy - 34, 100, 18, 235, 240, 245, 255);
+        draw_ellipse(&A.disc, tx + 20, 60 + oy, 12, 12, 40, 36, 40, 255); }
+    if (boss.state == RS_FALL && boss.timer > 0) { float k = 1 - boss.timer, tx = sx(boss.targetx) + ox;
+        draw_ellipse(&A.disc, tx, FLOOR_Y + oy, 60 + 120 * k, 12 + 12 * k, 10, 6, 10, (Uint8)(100 + 140 * k)); }
+    if (boss.state == RS_WAVE_WARN && (frame_no / 5) % 2) draw_glow(&A.disc, x + boss.face * 120, FLOOR_Y + oy - 30, 70, 255, 200, 80, 255);
+    if (boss.state == RS_WAVE) { float bx = sx(boss.sweepx) + ox;
+        for (int k = 0; k < 6; k++) draw_ellipse(&A.disc, bx - boss.face * k * 22, FLOOR_Y + oy - 22 - (5 - k) * 6, 40 - k * 4, 30 - k * 3, 245, 190 - k * 10, 60, 255);
+        draw_ellipse(&A.disc, bx - 8, FLOOR_Y + oy - 50, 8, 5, 255, 240, 200, 220); }
+    if (boss.pose < 0) return;
+    Tex *t = &A.rat[boss.pose];
+    double ang = boss.state == BS_DEAD ? sinf(frame_no * 0.5f) * 6 : sinf(boss.t * 1.6f) * 2;
+    draw_sprite(t, x, y + 10, 1, boss.face > 0, boss.flash ? 170 : 0, 255, ang, 1.0f + 0.02f * sinf(boss.t * 5));
+}
 /* ------------------------------------------------------------ projectiles, pickups, particles */
 static void update_proj(void) {
     for (int i = 0; i < MAXP; i++) {
@@ -774,6 +1065,8 @@ static void update_proj(void) {
         int tx = (int)(p->x / TILE), ty = (int)(p->y / TILE);
         if (solid_at(tx, ty) && p->y > 0) {
             if (p->type == P_NOTE && p->bounces > 0) { p->bounces--; p->vy = -650; p->y = ty * TILE - 1; sfx("boing"); splat(p->x, ty * TILE, 14, 1, 12, 8, 12); continue; }
+            if (p->type == P_PIZZA && p->vy >= 0 && p->bounces > 0) { p->bounces--; p->vy = -380; p->y = ty * TILE - 1; splat(p->x, ty * TILE, 10, 1, 170, 30, 20); continue; }
+            if (p->type == P_CONFETTI) { for (int i = 0; i < 12; i++) part(p->x, p->y, (frand() - 0.5f) * 400, -100 - frand() * 300, 0.8f, 4, 900, 120 + rand() % 136, 80 + rand() % 176, 80 + rand() % 176, 0); spark_burst(p->x, p->y, 6, 255, 220, 120); }
             if (p->type == P_DRIP || p->type == P_NOTE) { ink_burst(p->x, p->y, 6, 140); splat(p->x, ty * TILE, 12, 1, 12, 8, 12); }
             else if (p->type == P_RIVET) { spark_burst(p->x, p->y, 10, 255, 160, 60); smoke(p->x, p->y, 2, 90); ring(p->x, p->y, 40, 255, 170, 80); }
             else if (p->type == P_NAIL) { spark_burst(p->x, p->y, 5, 255, 230, 160); splat(p->x, p->y, 3, 0, 40, 36, 34); }
@@ -813,7 +1106,7 @@ static void update_proj(void) {
                     for (int j = 0; j < MAXP; j++) if (pr[j].enemy) pr[j].alive = 0;
                     boss.pose = 2;
                 }
-                if (boss.hp <= 0) { boss.summoned = 0; boss.state = BS_DEAD; boss.timer = 3.5f; score += 10000; message("UNCLE INKY TAKES A BOW!", 3.0f); shake = 16; sfx("roar2"); hitstop = 18; }
+                if (boss.hp <= 0) { boss.summoned = 0; boss.state = BS_DEAD; boss.timer = 3.5f; score += 10000; message(level_no == 1 ? "BIG CHEESE IS TOAST!" : "UNCLE INKY TAKES A BOW!", 3.0f); shake = 16; sfx("roar2"); hitstop = 18; }
                 else if (boss.hp < boss.maxhp / 2 && boss.hp + p->dmg >= boss.maxhp / 2) { sfx("angry"); message("HE'S STEAMED!", 1.5f); shake = 10; }
             }
         }
@@ -916,6 +1209,8 @@ void game_step(const Input pads[MAX_PADS], const int connected[MAX_PADS]) {
     unsigned anyp = 0; for (int i = 0; i < MAX_PADS; i++) anyp |= pads[i].pressed;
 
     if (scene == SC_TITLE) {
+        if (anyp & B_LEFT) { level_no = (level_no + NUM_LEVELS - 1) % NUM_LEVELS; sfx("menu"); }
+        if (anyp & B_RIGHT) { level_no = (level_no + 1) % NUM_LEVELS; sfx("menu"); }
         if (anyp & B_UP) { menu_sel = (menu_sel + 2) % 3; sfx("menu"); }
         if (anyp & B_DOWN) { menu_sel = (menu_sel + 1) % 3; sfx("menu"); }
         if (anyp & (B_START | B_JUMP | B_SHOOT)) {
@@ -928,7 +1223,13 @@ void game_step(const Input pads[MAX_PADS], const int connected[MAX_PADS]) {
         return;
     }
     if (scene == SC_OVER || scene == SC_CLEAR) {
-        if (scene_t > 2.0f && (anyp & (B_START | B_JUMP))) { scene = SC_TITLE; music_play("mm_title", 1); }
+        if (scene_t > 2.0f && (anyp & (B_START | B_JUMP))) {
+            if (scene == SC_CLEAR && level_no + 1 < NUM_LEVELS) {   /* on to the next show, keeping your crew */
+                Player keep[2]; memcpy(keep, pl, sizeof keep); int sc = score;
+                level_no++; start_level(); score = sc;
+                for (int i = 0; i < 2; i++) if (keep[i].active) { pl[i].active = 1; pl[i].pad = keep[i].pad; pl[i].lives = keep[i].lives; pl[i].weapon = keep[i].weapon; reset_player(&pl[i], 0); }
+            } else { scene = SC_TITLE; music_play("mm_title", 1); }
+        }
         if (scene == SC_CLEAR) update_proj();
         return;
     }
@@ -948,17 +1249,17 @@ void game_step(const Input pads[MAX_PADS], const int connected[MAX_PADS]) {
     if (darkness_on && !was_dark && power <= 0) { sfx("thunder"); message("POWER OUT! FIND A BREAKER", 2.0f); }
 
     if (!boss.active) {   /* each area has its own take on the theme; missing tracks fall back to the main one */
-        static const char *ZONE_MUSIC[6] = {"mm_level1", "mm_level1", "mm_boiler", "mm_backstage", "mm_booth", "mm_level1"};
+        const char *const *ZONE_MUSIC = LEVELS[level_no].music;
         Player *lead = pl[0].active ? &pl[0] : &pl[1];
         const char *want = ZONE_MUSIC[zone_of(lead->x)];
-        static int avail[6] = {-1, -1, -1, -1, -1, -1};
+        static int avail[NUM_LEVELS][6] = {{-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}};
         int z = zone_of(lead->x);
-        if (avail[z] < 0) avail[z] = music_available(want);
-        music_play(avail[z] ? want : "mm_level1", 1);
+        if (avail[level_no][z] < 0) avail[level_no][z] = music_available(want);
+        music_play(avail[level_no][z] ? want : LEVELS[level_no].music[0], 1);
     }
     for (int i = 0; i < 2; i++) update_player(&pl[i], &pads[pl[i].pad]);
     op_input(&pads[op_pad]); auto_camera();
-    update_enemies(); update_fiend(); update_boss(); update_proj();
+    update_enemies(); update_fiend(); update_ovens(); update_boss(); update_proj();
 
     /* camera */
     float tx = 0; int n = 0;
@@ -995,11 +1296,40 @@ static void draw_tiles(float ox, float oy) {
             fill_rect((int)x, (int)y, TILE, 3, 150, 140, 120, 255);
             fill_rect((int)x + 4, (int)y + 10, 3, 14, 40, 36, 34, 255);
             draw_ellipse(&A.disc, x + 10, y + 5, 2, 2, 200, 180, 140, 255); draw_ellipse(&A.disc, x + 38, y + 5, 2, 2, 200, 180, 140, 255);
+        } else if (c == '~' && level_no == 1) {   /* hot cheese */
+            fill_rect((int)x, (int)y, TILE, TILE, 200, 120, 30, 255);
+            if (ty == 13) { float w = sinf(frame_no * 0.06f + tx * 0.9f) * 4;
+                draw_ellipse(&A.disc, x + 24, y + 4 + w, 30, 10, 245, 185, 60, 255);
+                draw_ellipse(&A.disc, x + 16, y + 2 + w, 7, 3, 255, 240, 170, 200);
+                if ((frame_no + tx * 13) % 50 < 12) draw_ellipse(&A.disc, x + 30, y - 2 + w, 5 + (frame_no % 12) * 0.4f, 5, 255, 210, 90, 255); }
         } else if (c == '~') {
             fill_rect((int)x, (int)y, TILE, TILE, 8, 6, 8, 255);
             if (ty == 13) { float w = sinf(frame_no * 0.06f + tx * 0.9f) * 4;
                 draw_ellipse(&A.disc, x + 24, y + 4 + w, 30, 10, 14, 10, 14, 255);
                 draw_ellipse(&A.disc, x + 16, y + 2 + w, 6, 2, 90, 80, 90, 120); }
+        } else if (c == 'O') {   /* brick oven */
+            fill_rect((int)x, (int)y, TILE, TILE, 120, 52, 34, 255);
+            for (int r = 0; r < 3; r++) fill_rect((int)x, (int)y + r * 16 + 15, TILE, 2, 60, 26, 16, 255);
+            fill_rect((int)x + ((tx + ty) % 2) * 24, (int)y, 2, TILE, 60, 26, 16, 255);
+            if (map[ty - 1][tx] != 'O') { fill_rect((int)x, (int)y, TILE, 6, 160, 80, 50, 255);
+                int left = map[ty][tx - 1] != 'O';
+                if (left) { float ph = oven_phase(tx); int on = oven_burning(tx);
+                    fill_rect((int)x + 10, (int)y + 20, 76, 30, 20, 8, 4, 255);
+                    draw_glow(&A.disc, x + 48, y + 34, on ? 60 : (ph > 2.9f ? 40 : 20), 255, 130, 30, on ? 255 : 160);
+                    if (on) {   /* the fire column */
+                        float k = fminf(1, ph / 0.15f) * fminf(1, (1.1f - ph) / 0.2f), hgt = 170 * k;
+                        draw_ellipse(&A.disc, x + 48, y - hgt * 0.5f, 34, hgt * 0.55f, 255, 120, 30, 220);
+                        draw_ellipse(&A.disc, x + 48, y - hgt * 0.45f, 20, hgt * 0.45f, 255, 220, 120, 255);
+                        draw_glow(&A.disc, x + 48, y - hgt * 0.5f, 80, 255, 140, 40, 200);
+                    } else if (ph > 2.9f && (frame_no / 4) % 2) draw_text_col(&A.small, "!", x + 48, y - 40, 0.7f, 1, 255, 120, 40, 255);
+                    if (lit[zone_of(tx * TILE)] > 0) draw_text_col(&A.small, "OFF", x + 48, y - 24, 0.4f, 1, 160, 220, 255, 255);
+                } }
+        } else if (c == '>' || c == '<') {   /* conveyor belt */
+            fill_rect((int)x, (int)y, TILE, 20, 50, 46, 44, 255);
+            fill_rect((int)x, (int)y + 20, TILE, TILE - 20, 30, 26, 24, 255);
+            int dir = c == '>' ? 1 : -1, off = ((frame_no * 3 * dir) % 16 + 16) % 16;
+            for (int k = -1; k < 4; k++) fill_rect((int)x + k * 16 + off, (int)y + 3, 8, 3, 150, 140, 120, 255);
+            draw_ellipse(&A.disc, x + 12, y + 30, 8, 8, 90, 84, 80, 255); draw_ellipse(&A.disc, x + 36, y + 30, 8, 8, 90, 84, 80, 255);
         } else if (c == 'B') {
             int used = 0; for (int i = 0; i < nbreak; i++) if (breakers[i].tx == tx) used = breakers[i].used;
             fill_rect((int)x + 6, (int)y + 2, 36, 50, 30, 28, 26, 255); fill_rect((int)x + 9, (int)y + 5, 30, 44, 110, 104, 92, 255);
@@ -1124,6 +1454,13 @@ static void draw_proj(float ox, float oy) {
         case P_TICKET: draw_tex_tint(&A.disc, x - 18, y - 9, 36, 18, 0, 0, 0, 0, 0, 0);
             fill_rect((int)x - 18, (int)y - 9, 36, 18, 220, 60, 50, 255); fill_rect((int)x - 14, (int)y - 5, 28, 10, 250, 220, 160, 255);
             fill_rect((int)x - 18, FLOOR_Y + (int)oy - 4, 36, 4, 0, 0, 0, 90); break;
+        case P_CONFETTI: { Uint8 r = (Uint8)(120 + (i * 37) % 136), g = (Uint8)(80 + (i * 71) % 176), b = (Uint8)(80 + (i * 113) % 176);
+            draw_ellipse(&A.disc, x, y, 12, 12, 30, 20, 20, 255); draw_ellipse(&A.disc, x, y, 9, 9, r, g, b, 255);
+            draw_bar(x, y - 9, x + 6, y - 18, 3, 230, 210, 160, 255); if (frame_no % 4 < 2) draw_glow(&A.disc, x + 6, y - 18, 10, 255, 200, 80, 255); break; }
+        case P_PIZZA: { float a = frame_no * 0.4f * (p->vx > 0 ? 1 : -1);
+            draw_ellipse(&A.disc, x, y, 28, 28, 120, 60, 20, 255); draw_ellipse(&A.disc, x, y, 23, 23, 235, 180, 70, 255);
+            for (int k = 0; k < 5; k++) { float b = a + k * 1.256f; draw_ellipse(&A.disc, x + cosf(b) * 13, y + sinf(b) * 13, 5, 5, 180, 30, 20, 255); }
+            draw_bar(x + cosf(a) * 22, y + sinf(a) * 22, x - cosf(a) * 22, y - sinf(a) * 22, 2, 150, 90, 40, 200); break; }
         case P_DRIP: draw_ellipse(&A.disc, x, y, 7, 11, 10, 8, 10, 255); draw_ellipse(&A.disc, x - 2, y - 3, 2, 3, 200, 200, 200, 160); break;
         }
     }
@@ -1175,8 +1512,10 @@ static void draw_fiend(float ox, float oy) {
     for (int k = 0; k < 5; k++) draw_ellipse(&A.disc, x - 90 + k * 45, y - 6, 26, 10, 8, 6, 8, 255);
 }
 
+static void draw_boss_rat(float ox, float oy);
 static void draw_boss(float ox, float oy) {
     if (!boss.active) return;
+    if (level_no == 1) { draw_boss_rat(ox, oy); return; }
     float x = sx(boss.x) + ox, y = boss.y + oy + boss.bob;
     if (boss.state == BS_SLAM_AIM) {   /* ink shadow where the tentacle will land */
         float k = 1 - boss.timer / 0.85f; float tx = sx(boss.targetx) + ox;
@@ -1233,15 +1572,15 @@ static void draw_hud(void) {
     if (boss.active && boss.state != BS_DEAD) {
         float bx = SCREEN_W / 2 - 300, by = SCREEN_H - 50;
         fill_rect((int)bx - 4, (int)by - 26, 608, 48, 20, 10, 8, 210);
-        draw_text_col(&A.small, "UNCLE INKY", bx, by - 24, 0.5f, 0, 255, 200, 150, 255);
+        draw_text_col(&A.small, LEVELS[level_no].boss_name, bx, by - 24, 0.5f, 0, 255, 200, 150, 255);
         fill_rect((int)bx, (int)by + 2, 600, 14, 50, 20, 20, 255);
         fill_rect((int)bx, (int)by + 2, (int)(600.0f * boss.hp / boss.maxhp), 14, 200, 40, 40, 255);
     }
     if (boss.state == BS_INTRO && boss.active) {
         float k = clampf(boss.timer, 0, 1);
         fill_rect(0, 250, SCREEN_W, 150, 10, 6, 4, (Uint8)(200 * k));
-        draw_text_col(&A.font, "UNCLE INKY", SCREEN_W / 2, 268, 1.6f, 1, 255, 220, 150, (Uint8)(255 * k));
-        draw_text_col(&A.small, "THE BANDLEADER WHO NEVER LEFT", SCREEN_W / 2, 352, 0.7f, 1, 230, 200, 170, (Uint8)(255 * k));
+        draw_text_col(&A.font, LEVELS[level_no].boss_name, SCREEN_W / 2, 268, 1.6f, 1, 255, 220, 150, (Uint8)(255 * k));
+        draw_text_col(&A.small, LEVELS[level_no].boss_line, SCREEN_W / 2, 352, 0.7f, 1, 230, 200, 170, (Uint8)(255 * k));
     }
     if (msg_t > 0) {
         Uint8 a = (Uint8)(255 * clampf(msg_t * 2, 0, 1));
@@ -1280,10 +1619,11 @@ static void draw_dark(void) {
 }
 
 static void draw_bg(float ox) {
-    if (A.bg.tex) {
-        float par = camx * 0.35f; int w = A.bg.w;
+    Tex *bgt = (level_no == 1 && A.bg2.tex) ? &A.bg2 : &A.bg;
+    if (bgt->tex) {
+        float par = camx * 0.35f; int w = bgt->w;
         float off = -fmodf(par, (float)w);
-        for (float x = off; x < SCREEN_W; x += w) draw_tex(&A.bg, x + ox * 0.3f, 0, (float)w, SCREEN_H, 0, 255);
+        for (float x = off; x < SCREEN_W; x += w) draw_tex(bgt, x + ox * 0.3f, 0, (float)w, SCREEN_H, 0, 255);
     } else fill_rect(0, 0, SCREEN_W, SCREEN_H, 60, 40, 30, 255);
     Uint8 dim = (Uint8)(110 - power * 0.6f);   /* the theatre dims as the power runs down */
     fill_rect(0, 0, SCREEN_W, SCREEN_H, 16, 8, 6, (Uint8)(70 + dim));
@@ -1311,14 +1651,15 @@ static void draw_title(void) {
     }
     draw_text_col(&A.font, "MIDNIGHT", mx + mw / 2, my + 34, 1.9f, 1, 255, 236, 180, 255);
     draw_text_col(&A.font, "MATINEE", mx + mw / 2, my + 112, 1.9f, 1, 255, 210, 120, 255);
-    draw_text_col(&A.small, "UNCLE INKY'S JAMBOREE PALACE  -  OPENING NIGHT", mx + mw / 2, my + mh + 16, 0.6f, 1, 240, 210, 170, 255);
+    { char b[96]; snprintf(b, sizeof b, "<  SHOW %d: %s  >", level_no + 1, LEVELS[level_no].title);
+      draw_text_col(&A.small, b, mx + mw / 2, my + mh + 16, 0.66f, 1, 255, 220, 150, 255); }
     const char *items[3] = {"SOLO  (GAMEPAD RUNS THE CAMERAS TOO)", "SECURITY OFFICE CO-OP", "POSSESSED PARTY MODE  (SOON)"};
     for (int i = 0; i < 3; i++) {
         float y = 420 + i * 62; int s = menu_sel == i;
         if (s) fill_rect(150, (int)y - 6, 660, 50, 120, 26, 22, 200);
         draw_text_col(&A.font, items[i], 480, y, 0.62f, 1, s ? 255 : 190, s ? 236 : 170, s ? 180 : 140, i == 2 ? 150 : 255);
     }
-    draw_text_col(&A.small, "D-PAD: CHOOSE   A / +: START", 480, 620, 0.5f, 1, 220, 200, 170, (Uint8)(150 + 100 * sinf(t * 4)));
+    draw_text_col(&A.small, "UP/DOWN: MODE   LEFT/RIGHT: SHOW   A / +: START", 480, 620, 0.5f, 1, 220, 200, 170, (Uint8)(150 + 100 * sinf(t * 4)));
     if (msg_t > 0) draw_text_col(&A.small, msg, SCREEN_W / 2, 668, 0.55f, 1, 255, 120, 90, 255);
 }
 
@@ -1350,10 +1691,11 @@ void game_draw(void) {
             draw_text_col(&A.font, "THE SHOW IS OVER", SCREEN_W / 2, 260, 1.4f, 1, 255, 80, 60, 255);
             draw_text_col(&A.small, "UNCLE INKY KEEPS HIS THEATRE... FOR NOW", SCREEN_W / 2, 360, 0.7f, 1, 240, 210, 170, 255);
         } else {
-            draw_text_col(&A.font, "OPENING NIGHT CLEARED!", SCREEN_W / 2, 230, 1.2f, 1, 255, 230, 150, 255);
+            { char b[64]; snprintf(b, sizeof b, "%s CLEARED!", LEVELS[level_no].title); draw_text_col(&A.font, b, SCREEN_W / 2, 230, 1.2f, 1, 255, 230, 150, 255); }
             char b[48]; snprintf(b, sizeof b, "SCORE %06d", score);
             draw_text_col(&A.font, b, SCREEN_W / 2, 320, 0.9f, 1, 255, 240, 210, 255);
-            draw_text_col(&A.small, "PROTOTYPE COMPLETE  -  MORE SHOWS COMING SOON", SCREEN_W / 2, 400, 0.6f, 1, 240, 210, 170, 255);
+            if (level_no + 1 < NUM_LEVELS) { char b[64]; snprintf(b, sizeof b, "NEXT: SHOW %d - %s", level_no + 2, LEVELS[level_no + 1].title); draw_text_col(&A.small, b, SCREEN_W / 2, 400, 0.6f, 1, 240, 210, 170, 255); }
+            else draw_text_col(&A.small, "MORE SHOWS COMING SOON", SCREEN_W / 2, 400, 0.6f, 1, 240, 210, 170, 255);
         }
         if (scene_t > 2) draw_text_col(&A.small, "PRESS A", SCREEN_W / 2, 480, 0.6f, 1, 255, 240, 200, (Uint8)(150 + 100 * sinf(scene_t * 4)));
     }
@@ -1375,6 +1717,8 @@ static void draw_feed(int z, float fx, float fy, float fw, float fh, int big) {
             else if (c == '~') PR(x, y, w, w, 4, 4, 4, 255);
             else if (c == 'C') PR(x, y, w, w, 70, 60, 44, 255);
             else if (c == 'B') PR(x + w * 0.2f, y, w * 0.6f, w, 160, 160, 140, 255);
+            else if (c == 'O') PR(x, y, w, w, 150, 90, 70, 255);
+            else if (c == '>' || c == '<') PR(x, y, w, w * 0.5f, 120, 120, 110, 255);
         }
         if (lit[z] > 0) PR(fx, fy, fw, fh, 255, 240, 180, 40);
     }

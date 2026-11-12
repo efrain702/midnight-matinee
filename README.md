@@ -5,7 +5,7 @@ Built on The Tolling's engine; the two-screen setup follows Hall Pass.
 Uncle Inky's Jamboree Palace has been condemned for decades. When the last reel plays, its ink-soaked animatronics
 wake up. You're the night crew sent in to shut it down.
 
-## Level 1: Opening Night (playable prototype)
+## Level 1: Opening Night
 Lobby, Auditorium, Boiler Room, Backstage, Projection Booth, then the Main Stage boss fight.
 * **Usherettes**: three-armed porcelain dolls that fire flashlight beams.
 * **Projector Dogs**: patrol the catwalks, warm up their lens and fire a long beam (jump or duck it).
@@ -15,6 +15,17 @@ Lobby, Auditorium, Boiler Room, Backstage, Projection Booth, then the Main Stage
   until it passes, or have the security office hit LIGHTS on CAM 4 to drive it back.
 * **Boss: Uncle Inky**, the animatronic octopus bandleader: tracked tentacle slams, bouncing ink notes, a spotlight
   sweep along the floor (jump it), and when he's angry, ticket rain and ink blob reinforcements.
+
+## Level 2: Pizza Party
+Party Room, Dining Hall, Pizza Counter, Kitchen, Delivery Dock, then The Rat's Den. Pick the show on the title screen
+with Left/Right; clearing a show carries your lives, weapon and score into the next one.
+* **Party Goats**: animatronic goats that blast confetti arcs from their accordions.
+* **Meatballs**: roll at you and pounce.
+* **Flying Slices**: bob through the air and dive-bomb you.
+* **Hot cheese pits**, **pizza ovens** that belch fire columns on a timer (LIGHTS in that zone shuts them off), and
+  **conveyor belts** that carry you and the enemies; the Delivery Dock crosses a cheese lake on moving belts.
+* **Boss: Big Cheese**, the chef who ate the birthday: cleaver chops aimed at you, bouncing pizzas, a cheese wave along
+  the floor (jump it) and a leaping body slam with a shockwave. When he's angry he calls in meatballs.
 
 ## Gear (Ghosts 'n Goblins style)
 Full gear, then torn overalls (the hard hat flies off), then **boxers**, then you're out. GEAR crates put clothes back on.
@@ -53,7 +64,7 @@ second window and you can click it). Headless tests: see the top of `engine/src/
 Characters, the boss and the background are Runway paintings on flat green, cut by `tools/cut_sprites.py`
 (sources in `art/refs`).
 
-Music style: **haunted theater organ rock** (a rotting movie-palace pipe organ + rock band, made in Suno).
+Music style: **haunted theater organ rock** (a rotting movie-palace pipe organ + rock band, made in Runway).
 Drop the .ogg files into `engine/content/music` with these names; any that are missing fall back to `mm_level1`:
 | file | where | style |
 |---|---|---|
@@ -65,8 +76,11 @@ Drop the .ogg files into `engine/content/music` with these names; any that are m
 | `mm_boss1` | Uncle Inky | heavy organ-metal waltz in 3/4 |
 | `mm_clear` | level clear | short triumphant organ fanfare |
 | `mm_gameover` | game over | sad organ winding down like a dying machine |
+| `mm_level2` | Pizza Party | party-organ polka rock, carnival calliope over the band |
+| `mm_kitchen` | Kitchen, Delivery Dock | the same tune over sizzling, clattering pots and machinery |
+| `mm_boss2` | Big Cheese | stomping organ-metal tarantella |
 
-All eight tracks were generated in Runway around one shared D-minor organ theme, with LOOPSTART tags so loops skip the intros.
+All eleven tracks were generated in Runway around one shared D-minor organ theme, with LOOPSTART tags so loops skip the intros.
 
 ## Gore and effects
 Enemies bleed oil-blood on every hit and come apart when they die: the sprite is chopped into chunks, plus painted
