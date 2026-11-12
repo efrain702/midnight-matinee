@@ -5,6 +5,9 @@
  *   MM_HEADLESS=1 MM_FRAMES=900 MM_SHOTS=out MM_SHOT_EVERY=30 MM_SCRIPT=script.txt MM_SCENE=level ./midnight_matinee
  * script lines: "<from_frame> <to_frame> <keys>"  keys: L R U D J(ump) A(shoot) K(lock) W(eapon) [ ] (cams) P(ing) G(lights) T(start)
  * MM_SCRIPT2 drives controller 1 (a second player); MM_PADS=n pretends n controllers are connected.
+ * QA: MM_CHECK=1 prints impossible states (stuck in walls, fell out of the world, NaN positions, full enemy table),
+ * MM_GOD=1 makes the runner invincible (pits send you to the checkpoint), MM_DRAW_EVERY=n draws every nth frame
+ * without saving it (exercises the drawing code in headless runs). Build with -fsanitize=address,undefined for a full sweep.
  */
 #include <SDL.h>
 #include <SDL_image.h>
@@ -133,6 +136,8 @@ int main(int argc, char **argv) {
     int every = getenv("MM_SHOT_EVERY") ? atoi(getenv("MM_SHOT_EVERY")) : 0;
     long maxf = getenv("MM_FRAMES") ? atol(getenv("MM_FRAMES")) : -1;
     int fake_pads = getenv("MM_PADS") ? atoi(getenv("MM_PADS")) : 1;
+    int check = getenv("MM_CHECK") != NULL;
+    int draw_every = getenv("MM_DRAW_EVERY") ? atoi(getenv("MM_DRAW_EVERY")) : 0;
 
     SDL_GameController *gc[MAX_PADS] = {0};
     unsigned prev[MAX_PADS] = {0}; long frame = 0; int running = 1;
@@ -175,12 +180,13 @@ int main(int argc, char **argv) {
                 con[i] = headless ? (i < fake_pads) : (i == 0 || gc[i] != NULL);
             }
             game_step(in, con); frame++;
+            if (check) game_check(frame);
             if (maxf > 0 && frame >= maxf) running = 0;
             if (game_wants_quit()) running = 0;
         }
         if (steps == 0 && !headless) { SDL_Delay(1); continue; }
         int shoot_now = headless && shots && every > 0 && frame % every == 0;
-        if (headless && !shoot_now) continue;
+        if (headless && !shoot_now && !(draw_every > 0 && frame % draw_every == 0)) continue;   /* MM_DRAW_EVERY: draw without saving (tests) */
         gfx_set_renderer(ren); game_draw();
         if (padRen) { gfx_set_renderer(padRen); SDL_SetRenderDrawColor(padRen, 0, 0, 0, 255); SDL_RenderClear(padRen); game_draw_pad(); gfx_set_renderer(ren); }
         if (shoot_now) {

@@ -536,8 +536,11 @@ static void start_level(void) {
     music_play(LEVELS[level_no].music[0], 1);
 }
 
+static int god_mode(void) { static int g = -1; if (g < 0) g = getenv("MM_GOD") != NULL; return g; }   /* tests: invincible runner */
+static void reset_player(Player *p, int full);
 static void hurt_player(Player *p, float from_x) {
     if (!p->alive || p->inv > 0 || p->hidden) return;
+    if (god_mode()) { p->inv = 1.6f; p->vx = (p->x < from_x ? -1 : 1) * 260; p->vy = -420; return; }
     p->gear--; p->inv = 1.6f; shake = 8;
     p->vx = (p->x < from_x ? -1 : 1) * 260; p->vy = -420;
     sfx("hurt");
@@ -545,7 +548,7 @@ static void hurt_player(Player *p, float from_x) {
     if (p->gear == 1) { for (int i = 0; i < 10; i++) part(p->x, p->y - 70, (frand() - 0.5f) * 400, -300 - frand() * 200, 1.0f, 8, 900, 70, 100, 150, 0); message("DOWN TO YOUR BOXERS!", 1.4f); }
     if (p->gear <= 0) { p->alive = 0; p->dead_t = 0; p->vy = -700; sfx("boom"); ink_burst(p->x, p->y - 60, 20, 300); }
 }
-static void kill_player(Player *p) { if (!p->alive) return; p->gear = 1; p->inv = 0; p->hidden = 0; hurt_player(p, p->x); }
+static void kill_player(Player *p) { if (!p->alive) return; if (god_mode()) { reset_player(p, 0); return; } p->gear = 1; p->inv = 0; p->hidden = 0; hurt_player(p, p->x); }
 
 /* ------------------------------------------------------------ init */
 static Tex load_or_empty(const char *rel) { Tex t = tex_load(rel); return t; }
@@ -2101,7 +2104,7 @@ void game_step(const Input pads[MAX_PADS], const int connected[MAX_PADS]) {
         return;
     }
     if (scene == SC_END) {   /* ending: the first run rolls into the harder second run; beating that is the true ending */
-        if (scene_t > 6.0f && (anyp & (B_START | B_JUMP))) {
+        if (scene_t > 6.0f && (anyp & (B_START | B_JUMP | B_SHOOT))) {
             if (!loop_no) { Player keep[2]; memcpy(keep, pl, sizeof keep); int sc = score;
                 loop_no = 1; level_no = 0; start_level(); score = sc; message("THE SECOND SHOW: EVERYTHING IS FASTER AND MEANER", 3.0f);
                 for (int i = 0; i < 2; i++) if (keep[i].active) { pl[i].active = 1; pl[i].pad = keep[i].pad; pl[i].lives = keep[i].lives + 2; pl[i].weapon = keep[i].weapon; reset_player(&pl[i], 0); } }
@@ -2110,7 +2113,7 @@ void game_step(const Input pads[MAX_PADS], const int connected[MAX_PADS]) {
         return;
     }
     if (scene == SC_OVER || scene == SC_CLEAR) {
-        if (scene_t > 2.0f && (anyp & (B_START | B_JUMP))) {
+        if (scene_t > 2.0f && (anyp & (B_START | B_JUMP | B_SHOOT))) {
             if (scene == SC_CLEAR && level_no + 1 >= NUM_LEVELS) { scene = SC_END; scene_t = 0; music_play("mm_ending", 0); return; }   /* the finale */
             if (scene == SC_CLEAR && level_no + 1 < NUM_LEVELS) {   /* on to the next show, keeping your crew */
                 Player keep[2]; memcpy(keep, pl, sizeof keep); int sc = score;
@@ -2894,4 +2897,29 @@ void game_draw_pad(void) {
         draw_text_col(&padSmall, "CAM 4: HIT LIGHTS!", 700, 436, 0.38f, 1, 255, 220, 200, 255);
     }
     for (float y = 0; y < PAD_H; y += 4) PR(0, y, PAD_W, 1, 0, 0, 0, 30);
+}
+
+/* ---- test watchdog (MM_CHECK): reports impossible states during scripted runs ---- */
+void game_check(long frame) {
+    static int stuck[2], fallen[2], reported = 0;
+    if (reported > 40) return;
+    #define REPORT(...) do { printf("CHECK f%ld scene%d show%d loop%d: ", frame, scene, level_no + 1, loop_no); printf(__VA_ARGS__); printf("\n"); reported++; } while (0)
+    if (scene != SC_PLAY) { stuck[0] = stuck[1] = fallen[0] = fallen[1] = 0; return; }
+    for (int i = 0; i < 2; i++) {
+        Player *p = &pl[i]; if (!p->active) continue;
+        if (!isfinite(p->x) || !isfinite(p->y) || !isfinite(p->vx) || !isfinite(p->vy)) REPORT("P%d non-finite pos/vel", i + 1);
+        if (!p->alive) { stuck[i] = fallen[i] = 0; continue; }
+        if (p->x < 0 || p->x > LW * TILE) REPORT("P%d outside level x=%.0f", i + 1, p->x);
+        if (p->y > LH * TILE + 96) { if (++fallen[i] == 90) REPORT("P%d fell below the world for 1.5s without dying y=%.0f x=%.0f", i + 1, p->y, p->x); } else fallen[i] = 0;
+        int tx = (int)(p->x / TILE), ty = (int)((p->y - 30) / TILE);
+        if (solid_at(tx, ty) && ty >= 0) { if (++stuck[i] == 60) REPORT("P%d inside a wall for 1s at tile %d,%d (%c)", i + 1, tx, ty, map[ty][tx]); } else stuck[i] = 0;
+        if (p->lives < 0 || p->lives > 99) REPORT("P%d lives=%d", i + 1, p->lives);
+    }
+    int alive = 0;
+    for (int i = 0; i < nen; i++) { Enemy *e = &en[i]; if (!e->alive) continue; alive++;
+        if (!isfinite(e->x) || !isfinite(e->y)) REPORT("enemy %d type %d non-finite", i, e->type);
+        else if (e->y > LH * TILE + 600) REPORT("enemy %d type %d fell out of the world y=%.0f (never cleaned up)", i, e->type, e->y); }
+    if (nen >= MAXE) { static long last; if (frame - last > 600) { REPORT("enemy table full (%d slots, %d alive)", nen, alive); last = frame; } }
+    if (!isfinite(boss.hp + 0.0f)) REPORT("boss hp non-finite");
+    #undef REPORT
 }
