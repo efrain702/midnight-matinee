@@ -2,7 +2,7 @@
 #define SAVE_H
 /* Everything that survives turning the Wii U off: progress, records, unlocks and settings.
    Stored on the SD card (sd:/wiiu/midnight_matinee/save.dat) or next to the game on PC. */
-#define SAVE_SHOWS 8
+#define SAVE_SHOWS 9   /* the eight shows plus the secret ninth */
 typedef struct {
     unsigned magic, version;
     unsigned char reached[2];             /* furthest show reached on the first run / the second run (0-based) */
@@ -17,7 +17,8 @@ typedef struct {
     unsigned char music_vol, sfx_vol, rumble, layout, shake, difficulty, outfit, style, runner;
     unsigned char badge[4];        /* Stagehand Badges earned (bits) */
     unsigned char language, breakers_flipped, closets_hidden;
-    unsigned char spare[8];
+    unsigned char secret_seen;            /* the "a secret show has opened" note was shown */
+    unsigned char spare[7];
 } SaveData;
 
 #define SAVE_SLOTS 3

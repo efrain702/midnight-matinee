@@ -1,8 +1,8 @@
 """Build the small show posters (show select, loading card, gallery) from each show's boss-room painting and boss sprite.
 Usage: python3 tools/make_posters.py   (run from the repo root)"""
 from PIL import Image, ImageFilter, ImageEnhance
-DIRS = ['lobby', 'pizza', 'reels', 'ink', 'lost', 'mirrors', 'roof', 'encore']
-BOSS = ['inky', 'rat', 'splicer', 'press', 'collector', 'vanity', 'headliner', 'unbound']
+DIRS = ['lobby', 'pizza', 'reels', 'ink', 'lost', 'mirrors', 'roof', 'encore', 'board']
+BOSS = ['inky', 'rat', 'splicer', 'press', 'collector', 'vanity', 'headliner', 'unbound', 'draftsman']
 W, H = 640, 360
 for i, (d, b) in enumerate(zip(DIRS, BOSS)):
     bg = ImageEnhance.Brightness(Image.open(f'engine/content/bg/{d}/z5.jpg').convert('RGB').resize((W, H), Image.LANCZOS)).enhance(0.62)

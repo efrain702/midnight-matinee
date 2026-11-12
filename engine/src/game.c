@@ -285,6 +285,28 @@ static const char *const TR_TAB[][2] = {
     {"DIFFICULTY", "DIFICULTAD"},
     {"BEST SCORE", "MEJOR PUNTAJE"},
     {"OR", "O"},
+    {"THE DRAWING BOARD", "LA MESA DE DIBUJO"},
+    {"WHERE EVERY CARTOON BEGINS", "DONDE EMPIEZA TODA CARICATURA"},
+    {"THE DRAFTSMAN", "EL DIBUJANTE"},
+    {"HE DREW UNCLE INKY. HE CAN ERASE YOU.", "\x03""L DIBUJ\x05"" AL T\x04""O INKY. Y PUEDE BORRARTE."},
+    {"SKETCH PAPER", "PAPEL DE BOCETO"},
+    {"PENCIL TEST", "PRUEBA A L\x02""PIZ"},
+    {"INK & PAINT", "TINTA Y PINTURA"},
+    {"THE MODEL SHEETS", "LAS HOJAS DE MODELO"},
+    {"THE LIGHT TABLE", "LA MESA DE LUZ"},
+    {"THE DRAFTSMAN IS ERASED!", "\x08""EL DIBUJANTE QUED\x05"" BORRADO!"},
+    {"HE'S SCRIBBLING FURIOUSLY!", "\x08""GARABATEA FURIOSO!"},
+    {"PENCILS FROM ABOVE!", "\x08""L\x02""PICES DESDE ARRIBA!"},
+    {"HE'S ERASING THE FLOOR! JUMP!", "\x08""EST\x02"" BORRANDO EL PISO! \x08""SALTA!"},
+    {"HE'S DRAWING REINFORCEMENTS!", "\x08""EST\x02"" DIBUJANDO REFUERZOS!"},
+    {"A SECRET SHOW HAS OPENED...", "SE ABRI\x05"" UNA FUNCI\x05""N SECRETA..."},
+    {"PENCILS DOWN. THE THEATRE IS FINALLY FREE.", "SUELTEN LOS L\x02""PICES. EL TEATRO POR FIN ES LIBRE."},
+    {"THE THEATRE IS FREE. THANKS FOR PLAYING!", "EL TEATRO ES LIBRE. \x08""GRACIAS POR JUGAR!"},
+    {"THE FINAL CUT", "EL CORTE FINAL"},
+    {"BEAT THE SECRET SHOW WITHOUT GETTING HIT", "SUPERA LA FUNCI\x05""N SECRETA SIN RECIBIR GOLPES"},
+    {"BEAT THE SECRET SHOW", "SUPERA LA FUNCI\x05""N SECRETA"},
+    {"PENCILS DOWN", "L\x02""PICES ABAJO"},
+    {"A SECRET...", "UN SECRETO..."},
     {"SOMETHING'S MISSING BACKSTAGE", "FALTA ALGO TRAS BAMBALINAS"},
     {"SOME OF THE GAME'S FILES COULDN'T BE FOUND.", "NO SE ENCONTRARON ALGUNOS ARCHIVOS DEL JUEGO."},
     {"PLEASE REINSTALL MIDNIGHT MATINEE FROM THE .WUHB FILE.", "VUELVE A INSTALAR MIDNIGHT MATINEE DESDE EL ARCHIVO .WUHB."},
@@ -436,13 +458,13 @@ static float fit(Font *f, const char *s, float scale, float maxw) { float w = te
 #define BG7_K 1.12f   /* painted floor height of the new show backgrounds */
 #define BG8_K 1.12f
 #define NCHARS 2   /* 0 Joe, 1 Rosie */
-typedef struct { Tex hero[NCHARS][3][HERO_FRAMES]; Tex usher[5], dog[5], blob[4], inky[3], gore[12], goat[5], meat[5], slice[5], rat[5], cleaver, gore2[12], bg2, bomb[5], ghost[5], glove[5], splicer[3], bg3, imp[5], worker[5], eel[5], press[3], bg4, suitcase[5], soldier[5], umbrella[5], collector[3], bg5, unbound[3], bg6, bg7, bg8, mannequin[5], puff[5], crow[5], bulb[5], vanity[3], headliner[3]; Tex bg, disc, vignette, mask, grain[4]; Font font, small; } Assets;
+typedef struct { Tex hero[NCHARS][3][HERO_FRAMES]; Tex usher[5], dog[5], blob[4], inky[3], gore[12], goat[5], meat[5], slice[5], rat[5], cleaver, gore2[12], bg2, bomb[5], ghost[5], glove[5], splicer[3], bg3, imp[5], worker[5], eel[5], press[3], bg4, suitcase[5], soldier[5], umbrella[5], collector[3], bg5, unbound[3], bg6, bg7, bg8, mannequin[5], puff[5], crow[5], bulb[5], vanity[3], headliner[3], scribble[5], draftsman[3], bg9; Tex bg, disc, vignette, mask, grain[4]; Font font, small; } Assets;
 static Assets A;
 static Font padFont, padSmall; static Tex padDisc;
 
 /* ------------------------------------------------------------ level */
 static char map[LH][LW + 1];
-enum { E_USHER, E_DOG, E_BLOB, E_MINIBLOB, E_GOAT, E_MEATBALL, E_SLICE, E_BOMB, E_GHOST, E_GLOVE, E_IMP, E_WORKER, E_EEL, E_SUITCASE, E_SOLDIER, E_UMBRELLA, E_SHADOW, E_MANNEQUIN, E_PUFF, E_MIRROR, E_CROW, E_BULB, E_CRATE, E_HATCRATE };
+enum { E_USHER, E_DOG, E_BLOB, E_MINIBLOB, E_GOAT, E_MEATBALL, E_SLICE, E_BOMB, E_GHOST, E_GLOVE, E_IMP, E_WORKER, E_EEL, E_SUITCASE, E_SOLDIER, E_UMBRELLA, E_SHADOW, E_MANNEQUIN, E_PUFF, E_MIRROR, E_CROW, E_BULB, E_SCRIBBLE, E_CRATE, E_HATCRATE };
 typedef struct { int type, alive, hp, face, state, flash, onground; float x, y, vx, vy, t, timer, marked, stun, plat0, plat1, burn, btick, land, mx; } Enemy;
 #define MAXE 128
 static Enemy en[MAXE]; static int nen;
@@ -458,7 +480,9 @@ typedef struct {
     const char *zone[6]; int x0[7]; const char *music[6];
     int boss_hp; const char *kill_msg, *angry_msg;
 } LevelDef;
-enum { L_LOBBY, L_PIZZA, L_REELS, L_INK, L_LOST, L_MIRROR, L_ROOF, L_ENCORE, NUM_LEVELS };
+enum { L_LOBBY, L_PIZZA, L_REELS, L_INK, L_LOST, L_MIRROR, L_ROOF, L_ENCORE, L_DRAW, NUM_LEVELS };
+#define NBADGE 22   /* Stagehand Badges (the last two belong to the secret show) */
+#define MAIN_SHOWS 8   /* the story run; Show 9 (The Drawing Board) is the secret one */
 static const LevelDef LEVELS[] = {
     {"OPENING NIGHT", "UNCLE INKY'S JAMBOREE PALACE", "UNCLE INKY", "THE BANDLEADER WHO NEVER LEFT", "mm_boss1",
      {"LOBBY", "AUDITORIUM", "BOILER ROOM", "BACKSTAGE", "PROJECTION BOOTH", "MAIN STAGE"}, {0, 40, 90, 130, 175, 210, LW},
@@ -484,6 +508,9 @@ static const LevelDef LEVELS[] = {
     {"ENCORE", "THE FINAL SHOW", "INKY UNBOUND", "THE SHOW MUST GO ON", "mm_boss6",
      {"BURNING LOBBY", "THE BALCONY", "ORCHESTRA PIT", "THE FLY LOFT", "CURTAIN CALL", "THE GRAND STAGE"}, {0, 40, 85, 125, 170, 210, LW},
      {"mm_level6", "mm_level6", "mm_level6", "mm_finale", "mm_finale", "mm_level6"}, 260, "THE CURTAIN FALLS ON UNCLE INKY!", "HIS HEART IS SHOWING! AIM FOR IT!"},
+    {"THE DRAWING BOARD", "WHERE EVERY CARTOON BEGINS", "THE DRAFTSMAN", "HE DREW UNCLE INKY. HE CAN ERASE YOU.", "mm_boss9",
+     {"SKETCH PAPER", "PENCIL TEST", "INK & PAINT", "THE MODEL SHEETS", "THE LIGHT TABLE", "THE DRAWING BOARD"}, {0, 40, 85, 125, 170, 210, LW},
+     {"mm_level9", "mm_level9", "mm_level9", "mm_lighttable", "mm_lighttable", "mm_level9"}, 280, "THE DRAFTSMAN IS ERASED!", "HE'S SCRIBBLING FURIOUSLY!"},
 };
 static int loop_no;   /* 0 = first run, 1 = the harder second run (beat it for the true ending) */
 static int level_no;
@@ -494,7 +521,7 @@ static int difficulty(void);   /* 0 Matinee (easy), 1 Normal, 2 Midnight (hard) 
 static void rumble_pad(int pad, float s, int ms);
 static void rumble_all(float s, int ms);
 static void show_cleared(void);
-static Tex posters[8];
+static Tex posters[NUM_LEVELS];
 static const Uint8 OUTFIT_RGB[5][3] = {{255, 255, 255}, {150, 172, 255}, {128, 116, 140}, {255, 214, 120}, {206, 214, 232}};
 static int over_sel, pause_sel, con_now[MAX_PADS], opt_back, credits_then;
 static void award(int b);
@@ -577,7 +604,7 @@ static void spawn(int type, int tx, int row) {
             type == E_BOMB ? 2 : type == E_GHOST ? 3 : type == E_GLOVE ? 3 :
             type == E_IMP ? 2 : type == E_WORKER ? 5 : type == E_EEL ? 3 :
             type == E_SUITCASE ? 4 : type == E_SOLDIER ? 3 : type == E_UMBRELLA ? 2 : type == E_SHADOW ? 4 :
-            type == E_MANNEQUIN ? 5 : type == E_PUFF ? 2 : type == E_MIRROR ? 4 : type == E_CROW ? 2 : type == E_BULB ? 3 : 1;
+            type == E_MANNEQUIN ? 5 : type == E_PUFF ? 2 : type == E_MIRROR ? 4 : type == E_CROW ? 2 : type == E_BULB ? 3 : type == E_SCRIBBLE ? 2 : 1;
     if (loop_no && type < E_CRATE) e->hp += 1 + e->hp / 3;   /* second run: everything is tougher */
     if (difficulty() == 2 && type < E_CRATE) e->hp += 1 + e->hp / 4;
     e->timer = 1.0f + frand(); e->plat0 = 0; e->plat1 = LW * TILE;
@@ -598,11 +625,12 @@ static void build_level5(void);
 static void build_level6(void);
 static void build_level7(void);
 static void build_level8(void);
+static void build_level9(void);
 static void build_show(void) {
     switch (level_no) {
     case L_PIZZA: build_level2(); break;   case L_REELS: build_level3(); break;  case L_INK: build_level4(); break;
     case L_LOST: build_level5(); break;    case L_MIRROR: build_level7(); break; case L_ROOF: build_level8(); break;
-    case L_ENCORE: build_level6(); break;  default: build_level1();
+    case L_ENCORE: build_level6(); break;  case L_DRAW: build_level9(); break;  default: build_level1();
     }
 }
 
@@ -615,7 +643,7 @@ static int zone_x0_now[7];
 static int is_flyer(int t) { return t == E_SLICE || t == E_UMBRELLA || t == E_PUFF || t == E_CROW || t == E_GHOST; }
 static int is_walker(int t) {
     return t == E_USHER || t == E_BLOB || t == E_GOAT || t == E_MEATBALL || t == E_BOMB || t == E_GLOVE || t == E_IMP || t == E_WORKER ||
-           t == E_SUITCASE || t == E_SOLDIER || t == E_SHADOW || t == E_MANNEQUIN || t == E_BULB;
+           t == E_SUITCASE || t == E_SOLDIER || t == E_SHADOW || t == E_MANNEQUIN || t == E_BULB || t == E_SCRIBBLE;
 }
 /* the enemy this part of the show is known for (most common walker / flyer in that zone, else anywhere in the show) */
 static int local_type(int x0, int x1, int flyer) {
@@ -644,7 +672,7 @@ static void rod(int tx, int y);
 static void step_mat(int x0, int x1, int y) {
     switch (level_no) {
     case L_PIZZA: conveyor(x0, x1, y, '>'); break;
-    case L_REELS: case L_ENCORE: filmplat(x0, x1, y); break;
+    case L_REELS: case L_ENCORE: case L_DRAW: filmplat(x0, x1, y); break;
     case L_LOST: blocks(x0, x1, y); break;
     case L_ROOF: neon(x0, x1, y); break;
     default: plat(x0, x1, y);
@@ -662,6 +690,7 @@ static void stretch_hazard(int k, int g) {
     case L_MIRROR: if (k == 1) reflection(x + 2, x); else mirror(x, 10, 12); break;
     case L_ROOF: rod(x, 12); break;
     case L_ENCORE: if (k == 2) vent(x); else crusher(x); break;
+    case L_DRAW: if (k == 0) mousetrap(x); else if (k == 1) saw(x, 9); else vent(x); break;
     }
 }
 static void build_stretch(int k, int g, int zx0, int zx1) {
@@ -1015,7 +1044,7 @@ static int op_pad;          /* who runs the cameras */
 static int score;
 
 /* projectiles */
-enum { P_NAIL, P_RIVET, P_FLAME, P_PLUNGER, P_LIGHT, P_NOTE, P_TICKET, P_DRIP, P_CONFETTI, P_PIZZA, P_CHEESE, P_FILM, P_REEL, P_INKBLOB, P_SHEET, P_CORK, P_SHOE, P_LIPSTICK, P_SHARD, P_KISS, P_SPARK, P_LETTER, P_BULB };
+enum { P_NAIL, P_RIVET, P_FLAME, P_PLUNGER, P_LIGHT, P_NOTE, P_TICKET, P_DRIP, P_CONFETTI, P_PIZZA, P_CHEESE, P_FILM, P_REEL, P_INKBLOB, P_SHEET, P_CORK, P_SHOE, P_LIPSTICK, P_SHARD, P_KISS, P_SPARK, P_LETTER, P_BULB, P_PENCIL };
 typedef struct { int type, alive, enemy, dmg, bounces, last_hit; float x, y, vx, vy, life, grav, r; } Proj;
 #define MAXP 160
 static Proj pr[MAXP];
@@ -1257,9 +1286,10 @@ void game_init(void) {
     for (int i = 0; i < 3; i++) { snprintf(rel, sizeof rel, "chars/unbound_%d.png", i); A.unbound[i] = load_or_empty(rel); }
     A.bg7 = load_or_empty("bg/mirrors.jpg");
     A.bg8 = load_or_empty("bg/rooftop.jpg");
+    A.bg9 = load_or_empty("bg/drawingboard.jpg");
     {   /* shows 6 and 7 */
         struct { const char *n; Tex *t; int k; } sets[] = {{"mannequin", A.mannequin, 5}, {"puff", A.puff, 5}, {"crow", A.crow, 5}, {"bulb", A.bulb, 5},
-                                                           {"vanity", A.vanity, 3}, {"headliner", A.headliner, 3}};
+                                                           {"vanity", A.vanity, 3}, {"headliner", A.headliner, 3}, {"scribble", A.scribble, 5}, {"draftsman", A.draftsman, 3}};
         for (unsigned s = 0; s < sizeof sets / sizeof *sets; s++) for (int i = 0; i < sets[s].k; i++) {
             snprintf(rel, sizeof rel, "chars/%s_%d.png", sets[s].n, i); sets[s].t[i] = load_or_empty(rel);
             if (!sets[s].t[i].tex && i) sets[s].t[i] = sets[s].t[0]; }
@@ -1305,6 +1335,11 @@ void game_goto(const char *name) {
         if (!strcmp(name, "boss7")) { cur_check = ncheck - 1; reset_player(&pl[0], 0); }
         if (!strcmp(name, "mirrors")) { cur_check = 3; reset_player(&pl[0], 0); }
         if (!strcmp(name, "dressing")) { cur_check = 4; reset_player(&pl[0], 0); }
+        return;
+    }
+    if (!strcmp(name, "level9") || !strcmp(name, "boss9")) {   /* the secret show */
+        level_no = L_DRAW; start_level();
+        if (!strcmp(name, "boss9")) { cur_check = ncheck - 1; reset_player(&pl[0], 0); }
         return;
     }
     if (!strcmp(name, "level8") || !strcmp(name, "boss8") || !strcmp(name, "neon") || !strcmp(name, "rods")) {
@@ -1514,6 +1549,7 @@ static void enemy_box(Enemy *e, float *w, float *h) {
     case E_MIRROR: *w = 44; *h = 140; break;
     case E_CROW: *w = 74; *h = 52; break;
     case E_BULB: *w = 56; *h = 100; break;
+    case E_SCRIBBLE: *w = 56; *h = 70; break;
     case E_WORKER: *w = 70; *h = 140; break;
     case E_EEL: *w = 60; *h = (e->state == 1 ? 80 : e->state == 2 ? 150 : 20); break;
     default: *w = 56; *h = 48; break;
@@ -1552,6 +1588,7 @@ static Tex *enemy_tex(Enemy *e) {
     case E_BULB: return &A.bulb[e->flash > 3 ? 4 : e->state == 1 ? 2 : e->state == 2 ? 3 : fabsf(e->vx) > 5 ? ((int)(e->t * 6)) % 2 : 0];
     case E_MIRROR: { Player *src = &pl[0]; int set = src->gear >= 3 ? 0 : src->gear == 2 ? 1 : 2;
         return &A.hero[src->chr][set][!e->onground ? 5 : fabsf(e->vx) > 20 ? 1 + ((int)(e->t * 8)) % 4 : 0]; }
+    case E_SCRIBBLE: return &A.scribble[e->flash > 3 ? 3 : !e->onground ? 2 : fabsf(e->vx) > 5 ? ((int)(e->t * 8)) % 2 : 4];
     case E_IMP: return &A.imp[e->flash ? 4 : e->state == 1 ? (e->timer > 0.2f ? 2 : 3) : (fabsf(e->vx) > 5 ? ((int)(e->t * 7)) % 2 : 0)];
     case E_WORKER: return &A.worker[e->flash > 3 ? 4 : e->state == 1 ? 2 : e->state == 2 ? 3 : (fabsf(e->vx) > 5 ? ((int)(e->t * 7)) % 2 : 0)];
     case E_EEL: return &A.eel[e->state == 1 ? (e->timer > 0.2f ? 0 : 1) : e->state == 2 ? (e->timer < 0.6f && e->timer > 0.25f ? 3 : 2) : 4];
@@ -1668,6 +1705,12 @@ static void gore_enemy(Enemy *e) {
         sfx("shatter"); sfx("beam"); if (t) shatter(t, e->x, e->y, e->face > 0, 2, 3, 420, 0);
         spark_burst(cx, cy - 20, 30, 255, 240, 140); ring(cx, cy - 20, 110, 255, 240, 160);
         for (int i = 0; i < 12; i++) part_k(PK_DEBRIS, cx, cy - 20, (frand() - 0.5f) * 600, -200 - frand() * 400, 1.5f, 4 + frand() * 5, 1600, 240, 240, 220, 0);
+        break;
+    case E_SCRIBBLE:    /* unravels into a cloud of pencil lines and graphite dust */
+        sfx("poof"); if (t) shatter(t, e->x, e->y, e->face > 0, 2, 2, 380, 0);
+        for (int i = 0; i < 26; i++) { float a = frand() * 6.283f, v = 150 + frand() * 400;
+            part_k(PK_DEBRIS, cx, e->y - 36, cosf(a) * v, sinf(a) * v - 200, 1.4f, 2 + frand() * 4, 1200, 40, 38, 44, 0); }
+        smoke(cx, e->y - 36, 4, 150);
         break;
     case E_EEL:     /* the eel bursts in a spray of ink and red */
         sfx("splat"); if (t) shatter(t, e->x, e->y, e->face > 0, 2, 4, 400, 1);
@@ -1899,6 +1942,14 @@ static void update_enemies(void) {
                     sfx("beam"); e->state = 2; e->timer = 0.35f; }
             } else { e->vx = 0; e->timer -= DT; if (e->timer <= 0) { e->state = 0; e->timer = 2.0f + frand(); } }
             break;
+        case E_SCRIBBLE:   /* scurries at you, then pounces when it gets close */
+            if (t && dist < 820) e->face = t->x < e->x ? -1 : 1;
+            e->timer -= DT * speed_k;
+            if (e->onground) {
+                e->vx = (t && dist < 820) ? e->face * 150 * speed_k : e->vx * 0.8f;
+                if (e->timer <= 0 && t && fabsf(t->x - e->x) < 280 && fabsf(t->y - e->y) < 140) { e->vx = e->face * 360; e->vy = -560; e->timer = 1.4f + frand() * 0.6f; sfx("boing"); }
+            }
+            break;
         case E_SUITCASE:   /* big chomping hops toward you */
             e->timer -= DT * speed_k;
             if (e->onground) { e->vx *= 0.8f; if (e->timer <= 0 && t && dist < 820) {
@@ -2045,7 +2096,7 @@ static void update_crushers_vents(void) {
 }
 /* toy blocks crumble a moment after you land on them, then stack themselves back up; mousetraps snap */
 static void update_blocks_traps(void) {
-    if (level_no != L_LOST && level_no != L_ENCORE) return;
+    if (level_no != L_LOST && level_no != L_ENCORE && level_no != L_DRAW) return;
     for (int k = 0; k < 2; k++) { Player *p = &pl[k]; if (!p->active || !p->alive || !p->onground) continue;
         int ty = (int)((p->y + 2) / TILE);
         for (int dx = -1; dx <= 1; dx++) { int tx = (int)((p->x + dx * 16) / TILE);
@@ -2142,12 +2193,14 @@ static void update_boss_collector(void);
 static void update_boss_unbound(void);
 static void update_boss_vanity(void);
 static void update_boss_headliner(void);
+static void update_boss_draftsman(void);
 static void update_boss(void) {
     boss_entrance_update();
     if (!boss.active) {
         if (!arena_locked) for (int k = 0; k < 2; k++) if (pl[k].active && pl[k].alive && pl[k].x > ARENA_X + 150) boss_start();
         return;
     }
+    if (level_no == L_DRAW) { update_boss_draftsman(); return; }
     if (level_no == L_ENCORE) { update_boss_unbound(); return; }
     if (level_no == L_ROOF) { update_boss_headliner(); return; }
     if (level_no == L_MIRROR) { update_boss_vanity(); return; }
@@ -2991,6 +3044,124 @@ static void draw_boss_headliner(float ox, float oy) {
     if (boss.state == HS_STRIKE || boss.state == HS_LETTERS) draw_glow(&A.disc, x + boss.face * 90, y - 220, 50 + sinf(frame_no * 0.8f) * 12, 200, 220, 255, 200);
 }
 
+/* ------------------------------------------------------------ Show 9 (secret): The Drawing Board */
+static void build_level9(void) {
+    for (int y = 0; y < LH; y++) { memset(map[y], '.', LW); map[y][LW] = 0; }
+    nen = nbreak = ndrip = ncheck = 0;
+    block(0, LW - 1, 13, 14);
+    block(0, 0, 0, 12); block(LW - 1, LW - 1, 0, 12);
+    /* SKETCH PAPER: the scribbles wake up */
+    checkpoint(2);
+    spawn(E_SCRIBBLE, 12, 13); plat(16, 20, 10); spawn(E_SCRIBBLE, 18, 10); spawn(E_USHER, 26, 13); breaker(31);
+    spawn(E_CROW, 34, 6); spawn(E_SCRIBBLE, 37, 13);
+    /* PENCIL TEST: half-drawn floors that flicker in and out */
+    checkpoint(41);
+    pit(48, 54); plat(46, 50, 10); filmplat(52, 55, 9); spawn(E_SCRIBBLE, 59, 13); spawn(E_GOAT, 63, 13);
+    block(66, 68, 11, 12); spawn(E_IMP, 67, 10); pit(71, 76); plat(70, 77, 9); spawn(E_HATCRATE, 74, 9); spawn(E_GHOST, 80, 8);
+    /* INK & PAINT: wet ink drips from the shelves, the paint line keeps moving */
+    checkpoint(86);
+    drip(90); spawn(E_SCRIBBLE, 93, 13); block(97, 99, 12, 12); plat(101, 105, 9); spawn(E_SOLDIER, 103, 9);
+    pit(108, 113); conveyor(107, 114, 10, '>'); spawn(E_PUFF, 111, 6); spawn(E_SCRIBBLE, 117, 13); breaker(121);
+    /* THE MODEL SHEETS: every monster you've beaten, back for one more take */
+    checkpoint(126);
+    spawn(E_SUITCASE, 131, 13); spawn(E_MANNEQUIN, 137, 13); saw(141, 12); plat(144, 149, 9); spawn(E_BULB, 147, 9);
+    pit(152, 158); blocks(151, 159, 10); spawn(E_UMBRELLA, 155, 6); spawn(E_SCRIBBLE, 162, 13); breaker(165); spawn(E_WORKER, 167, 13);
+    /* THE LIGHT TABLE: glowing sheets, mousetraps and vents */
+    checkpoint(171);
+    spawn(E_SCRIBBLE, 176, 13); mousetrap(179); plat(182, 186, 10); spawn(E_CROW, 184, 6); vent(189); spawn(E_BULB, 193, 13);
+    pit(196, 200); filmplat(195, 201, 10); spawn(E_SCRIBBLE, 204, 13); breaker(206);
+    /* THE DRAWING BOARD (boss) */
+    checkpoint(209);
+    for (int i = 0; i < nen; i++) en[i].plat1 = LW * TILE;
+}
+
+/* ---- boss: The Draftsman. Rains pencils, sweeps the floor with his eraser, sketches monsters to life. */
+enum { DS_PENCILS = 160, DS_ERASE_WARN, DS_ERASE, DS_SKETCH, DS_SCRAWL };
+static float erase_from;
+static void update_boss_draftsman(void) {
+    float angry = boss.hp < boss.maxhp / 2 ? 0.7f : 1.0f;
+    boss.t += DT; if (boss.flash > 0) boss.flash--;
+    boss.timer -= DT; boss.bob = sinf(boss.t * 2.0f) * 6;
+    Player *t = nearest_player(boss.x, boss.y, NULL);
+    float lo = ARENA_X + 220, hi = ARENA_X + SCREEN_W - 200;
+    if (t && boss.state != BS_DEAD && boss.state != DS_ERASE) boss.face = t->x < boss.x ? -1 : 1;
+    if (boss.state != BS_DEAD && frame_no % 6 == 0) part_k(PK_DEBRIS, boss.x + (frand() - 0.5f) * 140, boss.y - frand() * 380, (frand() - 0.5f) * 120, -60 - frand() * 80, 0.2f, 2, 900, 60, 56, 62, 0);
+    switch (boss.state) {
+    case BS_INTRO: boss.pose = 0; if (boss.timer <= 0) { boss.state = BS_IDLE; boss.timer = 1.0f; } break;
+    case BS_IDLE:
+        boss.pose = angry < 1 ? 2 : 0;
+        if (t) { float want = t->x - boss.face * 430; boss.x += clampf(want - boss.x, -1, 1) * 120 / angry * DT; }
+        boss.x = clampf(boss.x, lo, hi);
+        if (boss.timer <= 0) {
+            int k = rand() % (angry < 1 ? 4 : 3);
+            if (k == 0) { boss.state = DS_PENCILS; boss.slams = angry < 1 ? 9 : 6; boss.timer = 0.3f; boss.sweepx = t ? t->x - boss.face * 260 : boss.x; sfx("charge"); message("PENCILS FROM ABOVE!", 1.0f); }
+            else if (k == 1) { boss.state = DS_ERASE_WARN; boss.timer = 0.9f; erase_from = boss.x; boss.face = boss.x > ARENA_X + SCREEN_W / 2 ? -1 : 1; sfx("roar1"); message("HE'S ERASING THE FLOOR! JUMP!", 1.2f); }
+            else if (k == 2) { boss.state = DS_SKETCH; boss.timer = 1.2f; sfx("summon"); message("HE'S DRAWING REINFORCEMENTS!", 1.3f); }
+            else { boss.state = DS_SCRAWL; boss.slams = 5; boss.timer = 0.35f; sfx("spit"); }
+        }
+        break;
+    case DS_PENCILS:   /* giant pencils drop point-first in a line that walks toward you */
+        boss.pose = 1;
+        if (boss.timer <= 0) { float x = clampf(boss.sweepx, ARENA_X + 40, ARENA_X + SCREEN_W - 40);
+            Proj *q = proj(P_PENCIL, x, -20, 0, 120, 1, 1); if (q) { q->r = 14; q->grav = 1400; q->life = 3.0f; }
+            boss.sweepx += boss.face * 130; boss.timer = 0.26f * angry; sfx("tick");
+            if (--boss.slams <= 0) { boss.state = BS_IDLE; boss.timer = 1.3f * angry; } }
+        break;
+    case DS_ERASE_WARN:   /* rears back, eraser glowing... */
+        boss.pose = 1; boss.x = erase_from - boss.face * 30 * sinf(boss.t * 30);
+        if (boss.timer <= 0) { boss.state = DS_ERASE; boss.timer = 2.4f; sfx("charge"); shake = 8; }
+        break;
+    case DS_ERASE:   /* ...then rubs out everything along the floor from one wall to the other */
+        boss.pose = 1; boss.x += boss.face * 820 / (angry < 1 ? 0.8f : 1.0f) * DT;
+        if (frame_no % 2 == 0) for (int k = 0; k < 2; k++) part(boss.x - boss.face * 60, FLOOR_Y - 10 - frand() * 30, -boss.face * (100 + frand() * 200), -50 - frand() * 150, 0.6f, 5, 900, 240, 160, 180, 0);
+        for (int k = 0; k < 2; k++) { Player *p = &pl[k]; if (p->active && p->alive && fabsf(p->x - boss.x) < 70 && p->y > FLOOR_Y - 60) hurt_player(p, boss.x); }
+        if (boss.x < lo - 120 || boss.x > hi + 120 || boss.timer <= 0) { boss.x = clampf(boss.x, lo, hi); boss.state = BS_IDLE; boss.timer = 1.4f * angry; }
+        break;
+    case DS_SKETCH:   /* scribbles come to life (and, when he's angry, an old foe drawn from memory) */
+        boss.pose = 1;
+        if (boss.timer <= 0) {
+            int alive = 0; for (int i = 0; i < nen; i++) if (en[i].alive && en[i].type < E_CRATE) alive++;
+            if (alive < 4) { int n = angry < 1 ? 2 : 1;
+                for (int i = 0; i < n; i++) { float x = ARENA_X + 140 + frand() * (SCREEN_W - 280); spawn(E_SCRIBBLE, (int)(x / TILE), 12);
+                    for (int k = 0; k < 12; k++) part_k(PK_DEBRIS, x, FLOOR_Y - 40, (frand() - 0.5f) * 300, -100 - frand() * 250, 1.0f, 2 + frand() * 3, 1200, 50, 46, 52, 0); }
+                if (angry < 1) { static const int FOES[] = {E_USHER, E_IMP, E_SOLDIER, E_BULB, E_MANNEQUIN}; float x = boss.x - boss.face * 300;
+                    spawn(FOES[rand() % 5], (int)(clampf(x, ARENA_X + 100, ARENA_X + SCREEN_W - 100) / TILE), 12); smoke(x, FLOOR_Y - 60, 5, 200); } }
+            boss.state = BS_IDLE; boss.timer = 1.5f * angry; }
+        break;
+    case DS_SCRAWL:   /* flicks blobs of ink from his inkwell hat */
+        boss.pose = 2;
+        if (boss.timer <= 0 && t) { float x0 = boss.x, y0 = boss.y - 400, dx = t->x - x0;
+            Proj *q = proj(P_INKBLOB, x0, y0, clampf(dx / 1.0f, -560, 560) + (frand() - 0.5f) * 200, -520, 1, 1); if (q) { q->grav = 1300; q->r = 14; q->life = 4; }
+            sfx("spit"); boss.timer = 0.32f; if (--boss.slams <= 0) { boss.state = BS_IDLE; boss.timer = 1.2f; } }
+        break;
+    case BS_DEAD:
+        if (boss.pose >= 0) boss.pose = 2;
+        if (frame_no % 4 == 0) { sfx("poof"); smoke(boss.x + (frand() - 0.5f) * 160, boss.y - frand() * 380, 2, 160);
+            for (int k = 0; k < 6; k++) part_k(PK_DEBRIS, boss.x, boss.y - 220, (frand() - 0.5f) * 700, -300 - frand() * 400, 1.6f, 2 + frand() * 4, 1400, 50, 46, 52, 0);
+            if (frame_no % 8 == 0) ink_burst(boss.x, boss.y - 300, 6, 300); }
+        if (!boss.summoned && boss.timer < 1.0f) {
+            boss.summoned = 1; shatter(&A.draftsman[2], boss.x, boss.y + 10, boss.face > 0, 4, 5, 900, 0); boss.pose = -1;
+            for (int i = 0; i < 60; i++) part_k(PK_DEBRIS, boss.x, boss.y - 240, (frand() - 0.5f) * 1200, -300 - frand() * 800, 2.0f, 2 + frand() * 5, 1300, 40 + rand() % 30, 38, 44, 0);
+            ink_burst(boss.x, boss.y - 260, 40, 600); ring(boss.x, boss.y - 200, 340, 250, 240, 220); shake = 26; hitstop = 10; rumble_all(1.0f, 700);
+        }
+        if (boss.timer <= 0 && scene == SC_PLAY) show_cleared();
+        break;
+    }
+    if (boss.state != BS_DEAD && boss.state != BS_INTRO && boss.state != DS_ERASE) boss_hit_player_box(boss.x, boss.y, 130, 330);
+}
+static void draw_boss_draftsman(float ox, float oy) {
+    if (boss.pose < 0) return;
+    float x = sx(boss.x) + ox, y = boss.y + oy + boss.bob;
+    Tex *t = &A.draftsman[boss.pose];
+    double ang = boss.state == BS_DEAD ? sinf(frame_no * 0.5f) * 6 : boss.state == DS_ERASE ? boss.face * 8 : sinf(boss.t * 1.2f) * 2;
+    if (boss.state == DS_ERASE_WARN || boss.state == DS_ERASE) draw_glow(&A.disc, x + boss.face * 110, y - 170, 70 + sinf(frame_no * 0.7f) * 14, 255, 140, 190, 220);
+    if (boss.state == DS_ERASE) draw_bar(x - boss.face * 40, y - 6, x - boss.face * 420, y - 6, 26, 255, 240, 230, 110);   /* the rubbed-out streak */
+    if (boss.state == DS_PENCILS) {   /* where the next pencil lands */
+        float px = sx(clampf(boss.sweepx, ARENA_X + 40, ARENA_X + SCREEN_W - 40)) + ox;
+        draw_ellipse(&A.disc, px, FLOOR_Y + oy - 4, 30, 8, 20, 14, 10, 160); }
+    draw_sprite(t, x, y + 10, 1, boss.face > 0, boss.flash ? 170 : 0, 255, ang, 1.0f);
+}
+
 /* ------------------------------------------------------------ final boss: Inky Unbound (Show 8: Encore) */
 static void update_boss_unbound(void) {
     float angry = boss.hp < boss.maxhp / 2 ? 0.7f : 1.0f;
@@ -3086,6 +3257,7 @@ static void update_proj(void) {
             if (p->type == P_LETTER && p->vy >= 0 && p->bounces > 0) { p->bounces--; p->vy = -560; p->y = ty * TILE - 1; sfx("clank"); spark_burst(p->x, p->y, 6, 255, 120, 200); continue; }
             if (p->type == P_SHARD) { sfx("shatter"); for (int k = 0; k < 6; k++) part_k(PK_DEBRIS, p->x, p->y, (frand() - 0.5f) * 400, -150 - frand() * 250, 1.2f, 3 + frand() * 4, 1600, 200, 225, 240, 0); }
             if (p->type == P_SPARK || p->type == P_BULB) { spark_burst(p->x, p->y, 10, 255, 240, 150); }
+            if (p->type == P_PENCIL) { sfx("clank"); for (int k = 0; k < 8; k++) part_k(PK_DEBRIS, p->x, p->y, (frand() - 0.5f) * 420, -150 - frand() * 260, 1.3f, 3 + frand() * 4, 1500, k % 2 ? 240 : 60, k % 2 ? 200 : 56, k % 2 ? 60 : 60, 0); }
             if (p->type == P_NOTE && p->bounces > 0) { p->bounces--; p->vy = -650; p->y = ty * TILE - 1; sfx("boing"); splat(p->x, ty * TILE, 14, 1, 12, 8, 12); continue; }
             if (p->type == P_REEL && p->vy >= 0) { p->y = ty * TILE - 1;
                 if (p->vy > 260 && p->bounces > 0) { p->bounces--; p->vy = -p->vy * 0.45f; sfx("clank"); spark_burst(p->x, p->y, 6, 255, 255, 240); }
@@ -3674,6 +3846,11 @@ static void draw_proj(float ox, float oy) {
         case P_LETTER: { char b[2] = {(char)(p->last_hit > 0 ? p->last_hit : 'M'), 0}; int pink = (b[0] % 2) == 0;
             draw_glow(&A.disc, x, y, 40, pink ? 255 : 90, pink ? 90 : 220, pink ? 190 : 255, 160);
             draw_text_col(&A.font, b, x, y - 22, 1.1f, 1, pink ? 255 : 180, pink ? 160 : 240, pink ? 220 : 255, 255); break; }
+        case P_PENCIL: {   /* a giant yellow pencil, point down */
+            fill_rect((int)x - 9, (int)y - 92, 18, 12, 240, 150, 170, 255); fill_rect((int)x - 9, (int)y - 80, 18, 6, 190, 190, 196, 255);
+            fill_rect((int)x - 9, (int)y - 74, 18, 58, 250, 196, 50, 255); fill_rect((int)x - 3, (int)y - 74, 4, 58, 255, 226, 120, 255);
+            for (int k = 0; k < 4; k++) fill_rect((int)x - 7 + k * 2, (int)y - 16 + k * 4, 14 - k * 4, 4, 230, 200, 160, 255);
+            fill_rect((int)x - 2, (int)y - 2, 4, 4, 40, 36, 40, 255); break; }
         case P_BULB: { draw_glow(&A.disc, x, y, 30, 255, 220, 110, 200); draw_ellipse(&A.disc, x, y - 2, 12, 12, 255, 245, 190, 255);
             draw_bar(x - 6, y + 10, x + 6, y + 10, 6, 150, 120, 60, 255); break; }
         case P_CORK: draw_ellipse(&A.disc, x, y, 11, 8, 60, 36, 18, 255); draw_ellipse(&A.disc, x, y, 9, 6, 200, 150, 90, 255);
@@ -3744,9 +3921,11 @@ static void draw_boss_press(float ox, float oy);
 static void draw_boss_collector(float ox, float oy);
 static void draw_boss_vanity(float ox, float oy);
 static void draw_boss_headliner(float ox, float oy);
+static void draw_boss_draftsman(float ox, float oy);
 static void draw_boss_unbound(float ox, float oy);
 static void draw_boss_inner(float ox, float oy) {
     if (!boss.active) return;
+    if (level_no == L_DRAW) { draw_boss_draftsman(ox, oy); return; }
     if (level_no == L_ENCORE) { draw_boss_unbound(ox, oy); return; }
     if (level_no == L_ROOF) { draw_boss_headliner(ox, oy); return; }
     if (level_no == L_MIRROR) { draw_boss_vanity(ox, oy); return; }
@@ -3871,8 +4050,8 @@ static void draw_dark(void) {
 
 /* ---- per-show art: a painting for each of the six zones, a foreground layer and a ground texture.
    Loaded when a show starts and freed when you leave it, so only one show's art is ever in memory. */
-static const char *SHOW_DIR[NUM_LEVELS] = {"lobby", "pizza", "reels", "ink", "lost", "mirrors", "roof", "encore"};
-static const float SHOW_K[NUM_LEVELS] = {1.0f, 1.0f, 1.12f, 1.12f, 1.12f, BG7_K, BG8_K, 1.03f};   /* painted floor height */
+static const char *SHOW_DIR[NUM_LEVELS] = {"lobby", "pizza", "reels", "ink", "lost", "mirrors", "roof", "encore", "board"};
+static const float SHOW_K[NUM_LEVELS] = {1.0f, 1.0f, 1.12f, 1.12f, 1.12f, BG7_K, BG8_K, 1.03f, 1.12f};   /* painted floor height */
 static void load_show_art(void) {
     if (zart_show == level_no) return;
     Uint32 t0 = SDL_GetTicks();
@@ -3913,7 +4092,7 @@ static void draw_foreground(float ox) {   /* silhouettes sliding past in front: 
     }
 }
 static void draw_bg(float ox) {
-    Tex *bgs[NUM_LEVELS] = {&A.bg, &A.bg2, &A.bg3, &A.bg4, &A.bg5, &A.bg7, &A.bg8, &A.bg6};
+    Tex *bgs[NUM_LEVELS] = {&A.bg, &A.bg2, &A.bg3, &A.bg4, &A.bg5, &A.bg7, &A.bg8, &A.bg6, &A.bg9};
     Tex *bgt = bgs[level_no]->tex ? bgs[level_no] : &A.bg;
     if (draw_zone_paintings(ox)) {}
     else if (bgt->tex) {
@@ -4230,7 +4409,7 @@ static float rumble_s[MAX_PADS]; static int rumble_ms[MAX_PADS];
 static struct { int level, keep, pending; Player crew[2]; int score; } ld;
 
 static Tex *boss_tex(int s) {
-    Tex *t[NUM_LEVELS] = {&A.inky[0], &A.rat[0], &A.splicer[0], &A.press[0], &A.collector[0], &A.vanity[0], &A.headliner[0], &A.unbound[0]};
+    Tex *t[NUM_LEVELS] = {&A.inky[0], &A.rat[0], &A.splicer[0], &A.press[0], &A.collector[0], &A.vanity[0], &A.headliner[0], &A.unbound[0], &A.draftsman[0]};
     return t[s];
 }
 static int popcount3(int b) { return (b & 1) + ((b >> 1) & 1) + ((b >> 2) & 1); }
@@ -4256,8 +4435,9 @@ static unsigned OK_BITS(void) { return B_START | (save.layout ? B_JUMP : B_SHOOT
 static unsigned BACK_BITS(void) { return B_PING | (save.layout ? B_SHOOT : B_JUMP); }
 
 static int has_progress(void) { return save.reached[0] > 0 || save.cleared[0][0] || save.seen_ending; }
-static int show_unlocked(int s) { return s == 0 || s <= save.reached[0] || s <= save.reached[1] || save.cleared[0][s] || save.cleared[1][s]; }
-static int rush_unlocked(void) { return save.cleared[0][NUM_LEVELS - 1] || save.cleared[1][NUM_LEVELS - 1] || getenv("MM_UNLOCK"); }
+static int secret_open(void) { return (save.true_ending && save_total_reels() >= 24) || save.cleared[0][L_DRAW] || save.cleared[1][L_DRAW] || getenv("MM_UNLOCK"); }
+static int show_unlocked(int s) { if (s == L_DRAW) return secret_open(); return s == 0 || s <= save.reached[0] || s <= save.reached[1] || save.cleared[0][s] || save.cleared[1][s]; }
+static int rush_unlocked(void) { return save.cleared[0][L_ENCORE] || save.cleared[1][L_ENCORE] || getenv("MM_UNLOCK"); }
 
 static void go_title(void) {
     paused = 0; audio_duck(0); rush_on = 0; loop_no = 0; scene = SC_TITLE; scene_t = 0; menu_sel = 1;
@@ -4299,6 +4479,7 @@ static void show_cleared(void) {
     load_aftermath(level_no);
     if (rush_on) return;
     int L = level_no, sc = score - show_score0;
+    if (getenv("MM_CHECK")) printf("CHECK cleared show%d frame%d time %.1fs\n", L + 1, frame_no, show_time);
     int pts = 100 - show_deaths * 15 - (int)fmaxf(0, (show_time - 360) / 5) + popcount3(reels_run) * 5;   /* par: six minutes */
     show_grade = pts >= 95 ? 4 : pts >= 80 ? 3 : pts >= 60 ? 2 : 1;
     if (show_grade > save.grade[L]) { save.grade[L] = (unsigned char)show_grade; show_newbest |= 1; }
@@ -4307,7 +4488,8 @@ static void show_cleared(void) {
     save.cleared[loop_no][L] = 1;
     if (L == 0) award(0);
     if (L == 3) award(1);
-    if (L == NUM_LEVELS - 1) award(2);
+    if (L == L_ENCORE) award(2);
+    if (L == L_DRAW) { award(20); if (!show_hit) award(21); }
     if (!show_hit) award(9);
     if (!boss_hit) award(10);
     if (show_time < 240) award(11);
@@ -4315,8 +4497,8 @@ static void show_cleared(void) {
     if (pl[0].active && pl[1].active) award(16);
     if (mode == 1) award(17);
     if (show_grade == 4) award(7);
-    { int all = 1; for (int i = 0; i < NUM_LEVELS; i++) if (save.grade[i] < 4) all = 0; if (all) award(8); }
-    if (L + 1 < NUM_LEVELS) { if (L + 1 > save.reached[loop_no]) save.reached[loop_no] = (unsigned char)(L + 1); save.cont_level = (unsigned char)(L + 1); save.cont_loop = (unsigned char)loop_no; }
+    { int all = 1; for (int i = 0; i < MAIN_SHOWS; i++) if (save.grade[i] < 4) all = 0; if (all) award(8); }
+    if (L + 1 < MAIN_SHOWS) { if (L + 1 > save.reached[loop_no]) save.reached[loop_no] = (unsigned char)(L + 1); save.cont_level = (unsigned char)(L + 1); save.cont_loop = (unsigned char)loop_no; }
     game_save();
 }
 static void start_intro(int then) {
@@ -4399,9 +4581,12 @@ static void step_title(unsigned anyp) {
     }
 }
 static void step_select(unsigned anyp) {
-    if (anyp & B_LEFT) { sel_show = (sel_show + NUM_LEVELS - 1) % NUM_LEVELS; sfx("menu"); }
-    if (anyp & B_RIGHT) { sel_show = (sel_show + 1) % NUM_LEVELS; sfx("menu"); }
-    if (anyp & (B_UP | B_DOWN)) { sel_show = (sel_show + 4) % NUM_LEVELS; sfx("menu"); }
+    int n = secret_open() ? NUM_LEVELS : MAIN_SHOWS;
+    if (sel_show >= n) sel_show = 0;
+    if (n == NUM_LEVELS && !save.secret_seen) { save.secret_seen = 1; game_save(); sfx("boss_sting"); message("A SECRET SHOW HAS OPENED...", 3.0f); }
+    if (anyp & B_LEFT) { sel_show = (sel_show + n - 1) % n; sfx("menu"); }
+    if (anyp & B_RIGHT) { sel_show = (sel_show + 1) % n; sfx("menu"); }
+    if (anyp & (B_UP | B_DOWN)) { if (n == MAIN_SHOWS) sel_show = (sel_show + 4) % n; else sel_show = sel_show < 5 ? (sel_show + 5 < n ? sel_show + 5 : n - 1) : sel_show - 5; sfx("menu"); }
     if (anyp & BACK_BITS()) { sfx("menu"); scene = SC_TITLE; scene_t = 0; return; }
     if (anyp & OK_BITS()) {
         if (!show_unlocked(sel_show)) { sfx("tick"); message("REACH THIS SHOW TO UNLOCK IT", 1.8f); return; }
@@ -4497,7 +4682,7 @@ static void step_intro(unsigned anyp) {
 }
 static const char *CREDITS[] = {
     "#MIDNIGHT MATINEE", "", "A GAME BY", "@EFRAIN GOMEZ", "", "", "STARRING THE NIGHT CREW", "@JOE", "@ROSIE", "", "",
-    "AND TONIGHT'S SHOWS", "*0", "*1", "*2", "*3", "*4", "*5", "*6", "*7", "", "",
+    "AND TONIGHT'S SHOWS", "*0", "*1", "*2", "*3", "*4", "*5", "*6", "*7", "*8", "", "",
     "ART, ANIMATION, MUSIC AND SOUND", "@MADE WITH RUNWAY", "", "PROGRAMMING", "@BUILT WITH CLAUDE", "", "ENGINE", "@C + SDL2 ON THE WII U, VIA WUT AND AROMA", "", "",
     "NO ANIMATRONICS WERE HARMED", "(SEVERAL WERE DEEPLY INCONVENIENCED)", "", "", "", "#THANKS FOR WATCHING THE SHOW", "", "SEE YOU AT THE NEXT MATINEE..."};
 #define NCRED (int)(sizeof CREDITS / sizeof *CREDITS)
@@ -4616,15 +4801,19 @@ static void draw_load_card(void) {
     draw_text_col(&A.small, b, SCREEN_W / 2, 604, 0.46f, 1, 210, 190, 160, 230);
     if (!rush_on) draw_reel_row(SCREEN_W / 2 + 470, 540, save.reels[L], 13);
     draw_text_col(&A.small, TIPS[(L * 7 + save_total_reels()) % (int)(sizeof TIPS / sizeof *TIPS)], SCREEN_W / 2, 636, 0.46f, 1, 255, 210, 140, 220);
-    draw_hint(ld.pending ? "LOADING..." : scene_t > 0.8f ? "PRESS [OK]" : "");
+    { const char *h = ld.pending ? "LOADING..." : scene_t > 0.8f ? "PRESS [OK]" : ""; draw_rich(&A.small, h, SCREEN_W / 2, 672, 0.55f, 1, 220, 200, 170, (Uint8)(170 + 80 * sinf(scene_t * 4))); }
 }
 
 static void draw_select(void) {
     draw_curtains(1); draw_header("SHOW SELECT");
-    for (int s = 0; s < NUM_LEVELS; s++) {
-        float w = 268, h = 151, x = 86 + (s % 4) * (w + 24), y = 128 + (s / 4) * (h + 104);
+    int nshow = secret_open() ? NUM_LEVELS : MAIN_SHOWS;
+    for (int s = 0; s < nshow; s++) {
+        int cols = nshow == MAIN_SHOWS ? 4 : 5, row = s / cols, col = s % cols, inrow = row == 0 ? cols : nshow - cols;
+        float w = nshow == MAIN_SHOWS ? 268 : 214, h = w * 151 / 268, gap = nshow == MAIN_SHOWS ? 24 : 22;
+        float x = (SCREEN_W - (inrow * w + (inrow - 1) * gap)) / 2 + col * (w + gap), y = (nshow == MAIN_SHOWS ? 128 : 150) + row * (h + 104);
         int on = s == sel_show, un = show_unlocked(s);
         fill_rect((int)x - 8, (int)y - 8, (int)w + 16, (int)h + 16, on ? 230 : 70, on ? 180 : 40, on ? 80 : 30, 255);
+        if (s == L_DRAW) draw_glow(&A.disc, x + w / 2, y + h / 2, w * 0.8f, 255, 200, 120, (Uint8)(60 + 40 * sinf(scene_t * 3)));
         if (un && posters[s].tex) draw_tex(&posters[s], x, y, w, h, 0, 255);
         else { fill_rect((int)x, (int)y, (int)w, (int)h, 24, 14, 12, 255); draw_text_col(&A.font, "?", x + w / 2, y + 36, 1.2f, 1, 120, 90, 70, 255); }
         char b[64]; snprintf(b, sizeof b, "%d. %s", s + 1, un ? LEVELS[s].title : "? ? ?");
@@ -4677,7 +4866,7 @@ static void draw_extras(void) {
     draw_curtains(1); draw_header("EXTRAS");
     char b[7][64]; int nb = 0; for (int i = 0; i < 32; i++) nb += (save.badge[i / 8] >> (i % 8)) & 1;
     snprintf(b[0], 64, "GALLERY"); snprintf(b[1], 64, "JUKEBOX"); snprintf(b[2], 64, "WARDROBE");
-    snprintf(b[3], 64, "STAGEHAND BADGES  %d / 20", nb); snprintf(b[4], 64, "WATCH THE INTRO"); snprintf(b[5], 64, "CREDITS"); snprintf(b[6], 64, "BACK");
+    snprintf(b[3], 64, "STAGEHAND BADGES  %d / %d", nb, NBADGE); snprintf(b[4], 64, "WATCH THE INTRO"); snprintf(b[5], 64, "CREDITS"); snprintf(b[6], 64, "BACK");
     for (int i = 0; i < 7; i++) menu_row(150 + i * 58, b[i], extras_sel == i, 0, 0.6f);
     char r[64]; snprintf(r, sizeof r, "FILM REELS FOUND:  %d / 24", save_total_reels());
     draw_text_col(&A.small, r, SCREEN_W / 2, 590, 0.6f, 1, 255, 210, 140, 255);
@@ -4765,6 +4954,7 @@ static void draw_credits(void) {
         const char *s = CREDITS[i];
         if (s[0] == '#') draw_text_col(&A.font, s + 1, SCREEN_W / 2, y, 0.95f, 1, 255, 226, 150, 255);
         else if (s[0] == '@') draw_text_col(&A.font, s + 1, SCREEN_W / 2, y, 0.55f, 1, 255, 240, 210, 255);
+        else if (s[0] == '*' && s[1] - '0' == L_DRAW && !secret_open()) draw_text_col(&A.small, "SHOW 9  ? ? ?", SCREEN_W / 2, y + 6, 0.55f, 1, 160, 130, 110, 255);
         else if (s[0] == '*') { int L = s[1] - '0'; char b[96]; snprintf(b, sizeof b, "SHOW %d  %s  -  %s", L + 1, LEVELS[L].title, LEVELS[L].boss_name);
             draw_text_col(&A.small, b, SCREEN_W / 2, y + 6, 0.55f, 1, 240, 210, 170, 255);
             Tex *t = boss_tex(L); if (t->tex) { float k = 90.0f / t->h; float bx = (L & 1) ? SCREEN_W - 170 : 170; draw_tex(t, bx - t->w * k / 2, y - 30, t->w * k, 90, L & 1, 255); } }
@@ -4780,7 +4970,7 @@ static void draw_rush_done(void) {
     char r[64], t2[32]; fmt_time(t2, sizeof t2, save.rush_best); snprintf(r, sizeof r, "BEST  %s", t2);
     draw_text_col(&A.small, r, SCREEN_W / 2, 360, 0.7f, 1, 240, 210, 170, 255);
     if (rush_new && (int)(scene_t * 3) % 2) draw_text_col(&A.font, "NEW RECORD!", SCREEN_W / 2, 420, 0.8f, 1, 255, 200, 80, 255);
-    for (int s = 0; s < NUM_LEVELS; s++) { Tex *t = boss_tex(s); if (!t->tex) continue; float k = 110.0f / t->h; float x = 120 + s * 148;
+    for (int s = 0; s < MAIN_SHOWS; s++) { Tex *t = boss_tex(s); if (!t->tex) continue; float k = 110.0f / t->h; float x = 120 + s * 148;
         draw_tex_tint(t, x - t->w * k / 2, 500, t->w * k, 110, 0, 90, 80, 80, 255, 0); draw_text_col(&A.font, "X", x, 520, 1.0f, 1, 220, 40, 30, 230); }
     if (scene_t > 2) draw_hint("PRESS [OK]");
 }
@@ -4876,11 +5066,12 @@ static int step_front(const Input pads[MAX_PADS], unsigned anyp, unsigned anyh) 
         if (scene_t < after_len()) { if (scene_t > 0.6f && (anyp & OK_BITS())) scene_t = after_len(); return 1; }
         if (scene_t > after_len() + 2.0f && (anyp & OK_BITS())) {
             if (rush_on) {
-                if (level_no + 1 < NUM_LEVELS) queue_show(level_no + 1, 1);
+                if (level_no + 1 < MAIN_SHOWS) queue_show(level_no + 1, 1);
                 else { int tt = (int)(rush_time * 10); rush_new = !save.rush_best || tt < save.rush_best; if (rush_new) save.rush_best = tt; award(14); if (rush_time < 480) award(15); game_save();
                        scene = SC_RUSHDONE; scene_t = 0; music_play("mm_ending", 0); }
             }
-            else if (level_no + 1 >= NUM_LEVELS) { scene = SC_END; scene_t = 0; music_play("mm_ending", 0); }
+            else if (level_no == L_DRAW) { save.cont_level = 0; save.cont_loop = 0; game_save(); start_credits(2); }
+            else if (level_no + 1 >= MAIN_SHOWS) { scene = SC_END; scene_t = 0; music_play("mm_ending", 0); }
             else queue_show(level_no + 1, 1);
         }
         if (scene == SC_CLEAR) update_proj();
@@ -4932,7 +5123,8 @@ static void draw_clear_card(void) {
         draw_text_col(&A.small, "RANK", SCREEN_W / 2 + 450, 210, 0.6f, 1, 230, 200, 160, 255);
         draw_grade(SCREEN_W / 2 + 450, 300, show_grade, 1.5f * pop * k, 255);
         if (show_newbest & 1) draw_text_col(&A.small, "NEW BEST RANK!", SCREEN_W / 2 + 450, 380, 0.45f, 1, 255, 200, 80, 255); }
-    if (level_no + 1 < NUM_LEVELS) { snprintf(b, sizeof b, "NEXT: SHOW %d - %s", level_no + 2, LEVELS[level_no + 1].title); draw_text_col(&A.small, b, SCREEN_W / 2, 490, 0.6f, 1, 240, 210, 170, 255); }
+    if (level_no == L_DRAW) draw_text_col(&A.small, "THE THEATRE IS FREE. THANKS FOR PLAYING!", SCREEN_W / 2, 490, 0.6f, 1, 255, 220, 150, 255);
+    else if (rush_on ? level_no + 1 < MAIN_SHOWS : level_no + 1 < MAIN_SHOWS) { snprintf(b, sizeof b, "NEXT: SHOW %d - %s", level_no + 2, LEVELS[level_no + 1].title); draw_text_col(&A.small, b, SCREEN_W / 2, 490, 0.6f, 1, 240, 210, 170, 255); }
     else draw_text_col(&A.small, "THE FINAL CURTAIN...", SCREEN_W / 2, 490, 0.6f, 1, 240, 210, 170, 255);
 }
 
@@ -4947,7 +5139,8 @@ static SaveData slot_peek[SAVE_SLOTS];
 #define AFTER_T 3.6f   /* how long the aftermath card holds before the score card */
 static const char *AFTER_LINE[NUM_LEVELS] = {
     "UNCLE INKY'S BATON HAS BEEN RETIRED.", "THE KITCHEN IS CLOSED. PERMANENTLY.", "THAT'S A WRAP!", "STOP THE PRESSES!",
-    "LOST: ONE COLLECTOR. NOBODY CAME TO CLAIM HIM.", "SEVEN YEARS BAD LUCK.", "HIS NAME IS NO LONGER IN LIGHTS.", "THE INK DRAINS AWAY... OR DOES IT?"};
+    "LOST: ONE COLLECTOR. NOBODY CAME TO CLAIM HIM.", "SEVEN YEARS BAD LUCK.", "HIS NAME IS NO LONGER IN LIGHTS.", "THE INK DRAINS AWAY... OR DOES IT?",
+    "PENCILS DOWN. THE THEATRE IS FINALLY FREE."};
 
 static void game_save(void) { if (!demo_on) save_write(); }
 static float after_len(void) { return (!rush_on && aftermath_tex.tex) ? AFTER_T : 0; }
@@ -5147,6 +5340,7 @@ static void boss_entrance_update(void) {
         boss.intro = 1; shake = 18; rumble_all(0.8f, 300);
         switch (L) {
         case L_LOBBY: case L_PIZZA: case L_INK: sfx("slam"); ring(boss.x, FLOOR_Y - 10, 260, 255, 220, 160); smoke(boss.x, FLOOR_Y - 10, 8, 90); ink_burst(boss.x, FLOOR_Y - 10, 18, 380); break;
+        case L_DRAW: sfx("summon"); for (int i = 0; i < 30; i++) part_k(PK_DEBRIS, boss.x + (frand() - 0.5f) * 200, boss.y - frand() * 400, (frand() - 0.5f) * 500, -200 - frand() * 300, 1.4f, 2 + frand() * 3, 1200, 50, 46, 52, 0); ring(boss.x, boss.y - 200, 260, 240, 230, 210); break;
         case L_REELS: case L_MIRROR: sfx("shatter"); spark_burst(boss.x, boss.y - 200, 30, 255, 250, 230); negative_t = 0.25f; break;
         case L_ROOF: sfx("thunder"); bolt_add(boss.x, 0.05f); spark_burst(boss.x, boss.y - 200, 40, 255, 250, 200); break;
         default: sfx("splash"); ink_burst(boss.x, FLOOR_Y - 10, 30, 420); ring(boss.x, FLOOR_Y - 10, 300, 200, 160, 220); break;
@@ -5163,7 +5357,7 @@ static void draw_boss(float ox, float oy) {
     case L_PIZZA: boss.x = bx + 700 * (1 - e); boss.y = by - 320 * sinf(3.14159f * clampf(k / ENTER_K, 0, 1)); break;   /* leaps in */
     case L_INK: boss.x = bx + 900 * (1 - clampf(k / ENTER_K, 0, 1)); boss.y = by - fabsf(sinf(k * 40)) * 10 * (1 - e); break;   /* rolls in */
     case L_LOST: case L_ENCORE: boss.y = by + 520 * (1 - e); break;                            /* rises from below */
-    case L_REELS: case L_MIRROR: if (k < ENTER_K && (frame_no / 3) % 2) return; if (k < ENTER_K) boss.x = bx + (frand() - 0.5f) * 40; break;   /* flickers in */
+    case L_REELS: case L_MIRROR: case L_DRAW: if (k < ENTER_K && (frame_no / 3) % 2) return; if (k < ENTER_K) boss.x = bx + (frand() - 0.5f) * 40; break;   /* flickers in */
     case L_ROOF: if (k < ENTER_K) return; break;                                               /* revealed by lightning */
     }
     draw_boss_inner(ox, oy);
@@ -5192,7 +5386,8 @@ static const char *land_sfx(void) { return level_no == L_PIZZA ? "land_tile" : (
 /* ==================================================================================================
    STAGEHAND BADGES (achievements)
    ================================================================================================== */
-static const char *const BADGE[20][2] = {
+
+static const char *const BADGE[NBADGE][2] = {
     {"FIRST NIGHT JITTERS", "BEAT SHOW 1"},
     {"HALFWAY THERE", "BEAT SHOW 4"},
     {"THE FINAL BOW", "BEAT SHOW 8"},
@@ -5213,11 +5408,13 @@ static const char *const BADGE[20][2] = {
     {"EYES ON THE CAMERAS", "BEAT A SHOW IN SECURITY CO-OP"},
     {"DRESSED FOR SUCCESS", "WEAR A NEW OUTFIT"},
     {"HIDE AND SEEK", "HIDE IN A PROP CLOSET"},
+    {"THE FINAL CUT", "BEAT THE SECRET SHOW"},
+    {"PENCILS DOWN", "BEAT THE SECRET SHOW WITHOUT GETTING HIT"},
 };
 static int badge_sel; static float toast_t; static int toast_id = -1;
 static int has_badge(int b) { return (save.badge[b / 8] >> (b % 8)) & 1; }
 static void award(int b) {
-    if (demo_on || b < 0 || b >= 20 || has_badge(b)) return;
+    if (demo_on || b < 0 || b >= NBADGE || has_badge(b)) return;
     save.badge[b / 8] |= (unsigned char)(1 << (b % 8)); game_save();
     toast_id = b; toast_t = 3.6f; sfx("reel");
 }
@@ -5231,22 +5428,23 @@ static void draw_medal(float x, float y, float r, int got) {
     else draw_text_col(&A.small, "?", x, y - r * 0.6f, r / 30.0f, 1, 120, 100, 80, 255);
 }
 static void step_badges(unsigned anyp) {
-    if (anyp & B_LEFT) { badge_sel = (badge_sel + 19) % 20; sfx("menu"); }
-    if (anyp & B_RIGHT) { badge_sel = (badge_sel + 1) % 20; sfx("menu"); }
-    if (anyp & B_UP) { badge_sel = (badge_sel + 15) % 20; sfx("menu"); }
-    if (anyp & B_DOWN) { badge_sel = (badge_sel + 5) % 20; sfx("menu"); }
+    if (anyp & B_LEFT) { badge_sel = (badge_sel + NBADGE - 1) % NBADGE; sfx("menu"); }
+    if (anyp & B_RIGHT) { badge_sel = (badge_sel + 1) % NBADGE; sfx("menu"); }
+    if (anyp & B_UP) { if (badge_sel >= 4) badge_sel -= 4; else { int c = badge_sel; while (c + 4 < NBADGE) c += 4; badge_sel = c; } sfx("menu"); }
+    if (anyp & B_DOWN) { badge_sel = badge_sel + 4 < NBADGE ? badge_sel + 4 : badge_sel % 4; sfx("menu"); }
     if (anyp & (BACK_BITS() | OK_BITS())) { sfx("menu"); scene = SC_EXTRAS; scene_t = 0; }
 }
 static void draw_badges(void) {
     draw_curtains(1); draw_header("STAGEHAND BADGES");
-    for (int i = 0; i < 20; i++) { float x = 70 + (i % 4) * 290, y = 150 + (i / 4) * 80; int on = i == badge_sel, got = has_badge(i);
-        if (on) fill_rect((int)x - 8, (int)y - 6, 284, 70, 120, 26, 22, 200);
-        draw_medal(x + 32, y + 36, 20, got);
+    for (int i = 0; i < NBADGE; i++) { float x = 70 + (i % 4) * 290, y = 132 + (i / 4) * 68; int on = i == badge_sel, got = has_badge(i);
+        if (on) fill_rect((int)x - 8, (int)y - 4, 284, 62, 120, 26, 22, 200);
+        draw_medal(x + 32, y + 28, 19, got);
         const char *nm = got ? BADGE[i][0] : "? ? ?";
-        draw_text_col(&A.small, nm, x + 64, y + 20, fit(&A.small, nm, 0.4f, 206), 0, got ? 255 : 160, got ? 230 : 140, got ? 170 : 120, 255); }
+        draw_text_col(&A.small, nm, x + 64, y + 14, fit(&A.small, nm, 0.4f, 206), 0, got ? 255 : 160, got ? 230 : 140, got ? 170 : 120, 255); }
     char b[128]; snprintf(b, sizeof b, "%s", has_badge(badge_sel) ? BADGE[badge_sel][0] : "? ? ?");
     draw_text_col(&A.font, b, SCREEN_W / 2, 562, fit(&A.font, b, 0.55f, 1100), 1, 255, 226, 160, 255);
-    draw_text_col(&A.small, BADGE[badge_sel][1], SCREEN_W / 2, 610, fit(&A.small, BADGE[badge_sel][1], 0.5f, 1100), 1, 230, 200, 160, 255);
+    { const char *d = badge_sel >= 20 && !has_badge(badge_sel) && !secret_open() ? "A SECRET..." : BADGE[badge_sel][1];
+      draw_text_col(&A.small, d, SCREEN_W / 2, 610, fit(&A.small, d, 0.5f, 1100), 1, 230, 200, 160, 255); }
     draw_hint("[DPAD] CHOOSE   [BACK] BACK");
 }
 static void draw_toast(void) {

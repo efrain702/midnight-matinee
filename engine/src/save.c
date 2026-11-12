@@ -5,7 +5,7 @@
 #include <sys/stat.h>
 
 #define SAVE_MAGIC 0x4D4D5356u   /* "MMSV" */
-#define SAVE_VERSION 1
+#define SAVE_VERSION 2   /* 2: room for the secret ninth show (version 1 files are converted) */
 
 SaveData save;
 int save_slot;
@@ -60,13 +60,41 @@ static void sanitize(SaveData *d) {   /* never trust the file blindly */
     if (d->runner > 1) d->runner = 0;
     if (d->language > 1) d->language = 0;
 }
+/* the layout before the ninth show existed */
+typedef struct {
+    unsigned magic, version;
+    unsigned char reached[2], cleared[2][8], grade[8], reels[8];
+    int best_score[8], best_time[8];
+    unsigned char seen_ending, true_ending, seen_intro, cont_loop, cont_level;
+    int rush_best;
+    unsigned char music_vol, sfx_vol, rumble, layout, shake, difficulty, outfit, style, runner;
+    unsigned char badge[4], language, breakers_flipped, closets_hidden, spare[8];
+} SaveDataV1;
+static int from_v1(const unsigned char *buf, SaveData *d) {
+    SaveDataV1 o; memcpy(&o, buf, sizeof o);
+    if (o.magic != SAVE_MAGIC || o.version != 1) return 0;
+    defaults(d);
+    memcpy(d->reached, o.reached, 2);
+    for (int r = 0; r < 2; r++) memcpy(d->cleared[r], o.cleared[r], 8);
+    memcpy(d->grade, o.grade, 8); memcpy(d->reels, o.reels, 8);
+    memcpy(d->best_score, o.best_score, sizeof o.best_score); memcpy(d->best_time, o.best_time, sizeof o.best_time);
+    d->seen_ending = o.seen_ending; d->true_ending = o.true_ending; d->seen_intro = o.seen_intro; d->cont_loop = o.cont_loop; d->cont_level = o.cont_level;
+    d->rush_best = o.rush_best;
+    d->music_vol = o.music_vol; d->sfx_vol = o.sfx_vol; d->rumble = o.rumble; d->layout = o.layout; d->shake = o.shake;
+    d->difficulty = o.difficulty; d->outfit = o.outfit; d->style = o.style; d->runner = o.runner;
+    memcpy(d->badge, o.badge, 4); d->language = o.language; d->breakers_flipped = o.breakers_flipped; d->closets_hidden = o.closets_hidden;
+    return 1;
+}
 static int read_file(int slot, SaveData *out) {
     char p[256]; path(p, sizeof p, slot, "");
     FILE *f = fopen(p, "rb");
     if (!f) { path(p, sizeof p, slot, ".tmp"); f = fopen(p, "rb"); }   /* a write that got cut off between remove and rename */
     if (!f) return 0;
-    SaveData d; size_t n = fread(&d, 1, sizeof d, f); fclose(f);
-    if (n != sizeof d || d.magic != SAVE_MAGIC || d.version != SAVE_VERSION) return 0;
+    unsigned char buf[sizeof(SaveData) + 64]; size_t n = fread(buf, 1, sizeof buf, f); fclose(f);
+    SaveData d;
+    if (n == sizeof d) { memcpy(&d, buf, sizeof d); if (d.magic != SAVE_MAGIC || d.version != SAVE_VERSION) return 0; }
+    else if (n == sizeof(SaveDataV1)) { if (!from_v1(buf, &d)) return 0; }
+    else return 0;
     sanitize(&d); *out = d; return 1;
 }
 static void apply_settings(const SaveData *s) {
@@ -130,5 +158,5 @@ void save_write(void) {
 int save_write_failed(void) { return write_failed; }
 
 int save_total_reels(void) {
-    int n = 0; for (int i = 0; i < SAVE_SHOWS; i++) for (int b = 0; b < 3; b++) n += (save.reels[i] >> b) & 1; return n;
+    int n = 0; for (int i = 0; i < 8; i++) for (int b = 0; b < 3; b++) n += (save.reels[i] >> b) & 1; return n;
 }
