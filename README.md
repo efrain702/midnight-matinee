@@ -66,4 +66,4 @@ Drop the .ogg files into `engine/content/music` with these names; any that are m
 | `mm_clear` | level clear | short triumphant organ fanfare |
 | `mm_gameover` | game over | sad organ winding down like a dying machine |
 
-The tracks in the folder now are placeholders borrowed from The Tolling.
+All eight tracks were generated in Runway around one shared D-minor organ theme, with LOOPSTART tags so loops skip the intros.
