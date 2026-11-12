@@ -41,6 +41,18 @@ colour. Title Card, Barnyard Short, Spook Short, Film Vault, Cutting Room, then 
   you, spat strips of film, film reels that rain down and roll, and a frame-skip where the picture flashes and she
   reappears on your other side. When she's angry she sends in bombs.
 
+## Level 4: The Ink Works
+The factory under the theatre where the ink is made. Loading Bay, Press Floor, Ink Vats, Pipe Works, Boiler Furnace,
+then The Press Room.
+* **Inkpot Imps**: walking inkwells that lob blobs of ink at you.
+* **Wind-up Workers**: tin factory men that rev their jackhammers and charge (they bounce off walls dazed).
+* **Pipe Eels**: hide in the ink vats and rise up to lunge when you get close; you can only hit them when they're up.
+* **Ceiling crushers**: riveted pistons that slam to the floor on a timer (watch the shadow). LIGHTS on the GamePad shuts
+  down the crushers in that zone, and they'll flatten enemies too.
+* **Steam vents**: a blast of steam throws you high into the air; ride them up to the high catwalks.
+* **Boss: The Big Press**, a living printing press: iron printing plates that track you and STAMP, razor-edged printed
+  sheets that flutter at you, and an ink roller that rolls across the floor (jump it). When it overheats it calls imps.
+
 ## Gear (Ghosts 'n Goblins style)
 Full gear, then torn overalls (the hard hat flies off), then **boxers**, then you're out. GEAR crates put clothes back on.
 TOOLS crates drop a cycling weapon icon: grab it when it shows the one you want:
@@ -96,8 +108,11 @@ Drop the .ogg files into `engine/content/music` with these names; any that are m
 | `mm_level3` | Cartoon Reels | 1930s cartoon ragtime on organ, honky-tonk piano and plunger trumpet over rock drums |
 | `mm_vault` | Film Vault, Cutting Room | the same tune slowed and twisted: ticking projector, snipping scissors |
 | `mm_boss3` | The Splicer | frantic organ-metal cartoon chase |
+| `mm_level4` | The Ink Works | industrial organ rock: anvils, chains, steam and a printing-press stamp on the beat |
+| `mm_pipes` | Pipe Works, Boiler Furnace | the same theme as a claustrophobic crawl: dripping ink, groaning pipes |
+| `mm_boss4` | The Big Press | crushing industrial organ-metal locked to the press stamp |
 
-All fourteen tracks were generated in Runway around one shared D-minor organ theme, with LOOPSTART tags so loops skip the intros.
+All seventeen tracks were generated in Runway around one shared D-minor organ theme, with LOOPSTART tags so loops skip the intros.
 
 ## Gore and effects
 Enemies bleed oil-blood on every hit and come apart when they die: the sprite is chopped into chunks, plus painted
