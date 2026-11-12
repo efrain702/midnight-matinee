@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
         padCanvas = SDL_CreateRGBSurfaceWithFormat(0, PAD_W, PAD_H, 32, SDL_PIXELFORMAT_RGBA32);
         padRen = SDL_CreateSoftwareRenderer(padCanvas);
     } else {
-#if defined(__WIIU__) && defined(SDL_WINDOW_WIIU_TV_ONLY)
+#ifdef __WIIU__   /* SDL_WINDOW_WIIU_* are enum values, not macros: "#if defined(SDL_WINDOW_WIIU_TV_ONLY)" was always false */
         /* two windows: the TV, and the GamePad with its own picture (the security office) */
         win = SDL_CreateWindow("Midnight Matinee", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_W, SCREEN_H,
                                SDL_WINDOW_SHOWN | SDL_WINDOW_WIIU_TV_ONLY | SDL_WINDOW_WIIU_PREVENT_SWAP);
