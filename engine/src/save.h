@@ -18,8 +18,15 @@ typedef struct {
     unsigned char spare[15];
 } SaveData;
 
+#define SAVE_SLOTS 3
 extern SaveData save;
-void save_load(void);   /* fills `save` (defaults when there's no file or it's from an older build) */
+extern int save_slot;         /* 0..2: whose progress `save` holds */
+void save_load_settings(void);   /* at boot, before a slot is picked: settings only (they're shared by every slot) */
+void save_load(void);   /* fills `save` from the current slot (defaults when there's no file or it's from an older build) */
+void save_use_slot(int slot);    /* pick a slot and load it */
+int save_peek(int slot, SaveData *out);   /* 1 if that slot has a save; *out gets it */
+void save_erase_slot(int slot);
+int save_write_failed(void);  /* the last write didn't reach the SD card (locked or missing) */
 void save_write(void);  /* best effort: a missing or locked SD card just means nothing is kept */
 void save_reset_progress(void);
 int save_total_reels(void);

@@ -8,7 +8,8 @@
  * QA: MM_CHECK=1 prints impossible states (stuck in walls, fell out of the world, NaN positions, full enemy table),
  * MM_GOD=1 makes the runner invincible (pits send you to the checkpoint), MM_DRAW_EVERY=n draws every nth frame
  * without saving it (exercises the drawing code in headless runs). Build with -fsanitize=address,undefined for a full sweep.
- * Front of house: MM_SCENE also takes select, options, extras, gallery, jukebox, wardrobe, intro, credits, rush, loadN.
+ * Front of house: MM_SCENE also takes logo, press, slots, demo, select, options, extras, gallery, jukebox, wardrobe, intro, credits, rush, loadN.
+ * With no MM_SCENE the game boots like the real thing: EGO logo, press start, save slots, title.
  * MM_SAVE=path uses that save file (headless runs otherwise save nothing), MM_DIFF=0..2 sets the difficulty,
  * MM_TX=n starts the runner at tile n, MM_DUMPMAP=1 prints each built show (with where its new stretches went),
  * MM_UNLOCK=1 opens the boss rush.

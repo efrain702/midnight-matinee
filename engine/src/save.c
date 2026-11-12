@@ -8,8 +8,12 @@
 #define SAVE_VERSION 1
 
 SaveData save;
+int save_slot;
+static int write_failed;
 
-/* Wii U: wut mounts the SD card at fs:/vol/external01 on start-up. PC: next to the game, or MM_SAVE (tests). */
+/* Wii U: wut mounts the SD card at fs:/vol/external01 on start-up. PC: next to the game, or MM_SAVE (tests).
+   Files: save1.dat .. save3.dat (one per slot) and settings.dat (shared). The very first build kept one save.dat:
+   it becomes slot 1 the first time slot 1 is read. */
 static const char *save_dir(void) {
 #ifdef __WIIU__
     return "fs:/vol/external01/wiiu/midnight_matinee";
@@ -23,46 +27,90 @@ static int enabled(void) {
 #endif
     return 1;
 }
-static void path(char *out, size_t n, const char *suffix) {
+/* slot -1 = settings, -2 = the old single save */
+static void path(char *out, size_t n, int slot, const char *suffix) {
     const char *custom = getenv("MM_SAVE");
-    if (custom) snprintf(out, n, "%s%s", custom, suffix);
-    else snprintf(out, n, "%s/save.dat%s", save_dir(), suffix);
+    if (custom) {
+        if (slot == -1) snprintf(out, n, "%s.settings%s", custom, suffix);
+        else if (slot <= 0) snprintf(out, n, "%s%s", custom, suffix);   /* slot 1 (and the legacy file) keep the plain name */
+        else snprintf(out, n, "%s.%d%s", custom, slot + 1, suffix);
+        return;
+    }
+    if (slot == -1) snprintf(out, n, "%s/settings.dat%s", save_dir(), suffix);
+    else if (slot == -2) snprintf(out, n, "%s/save.dat%s", save_dir(), suffix);
+    else snprintf(out, n, "%s/save%d.dat%s", save_dir(), slot + 1, suffix);
 }
 
-static void defaults(void) {
-    memset(&save, 0, sizeof save);
-    save.magic = SAVE_MAGIC; save.version = SAVE_VERSION;
-    save.music_vol = 8; save.sfx_vol = 8; save.rumble = 1; save.layout = 0; save.shake = 1; save.difficulty = 1;
+static void defaults(SaveData *d) {
+    memset(d, 0, sizeof *d);
+    d->magic = SAVE_MAGIC; d->version = SAVE_VERSION;
+    d->music_vol = 8; d->sfx_vol = 8; d->rumble = 1; d->layout = 0; d->shake = 1; d->difficulty = 1;
 }
+static void sanitize(SaveData *d) {   /* never trust the file blindly */
+    for (int r = 0; r < 2; r++) if (d->reached[r] >= SAVE_SHOWS) d->reached[r] = SAVE_SHOWS - 1;
+    if (d->cont_level >= SAVE_SHOWS) d->cont_level = 0;
+    if (d->cont_loop > 1) d->cont_loop = 0;
+    for (int i = 0; i < SAVE_SHOWS; i++) { if (d->grade[i] > 4) d->grade[i] = 0; d->reels[i] &= 7; }
+    if (d->music_vol > 10) d->music_vol = 8;
+    if (d->sfx_vol > 10) d->sfx_vol = 8;
+    if (d->difficulty > 2) d->difficulty = 1;
+    if (d->layout > 1) d->layout = 0;
+    if (d->outfit > 4) d->outfit = 0;
+    if (d->style > 1) d->style = 0;
+    if (d->runner > 1) d->runner = 0;
+}
+static int read_file(int slot, SaveData *out) {
+    char p[256]; path(p, sizeof p, slot, "");
+    FILE *f = fopen(p, "rb");
+    if (!f) { path(p, sizeof p, slot, ".tmp"); f = fopen(p, "rb"); }   /* a write that got cut off between remove and rename */
+    if (!f) return 0;
+    SaveData d; size_t n = fread(&d, 1, sizeof d, f); fclose(f);
+    if (n != sizeof d || d.magic != SAVE_MAGIC || d.version != SAVE_VERSION) return 0;
+    sanitize(&d); *out = d; return 1;
+}
+static void apply_settings(const SaveData *s) {
+    save.music_vol = s->music_vol; save.sfx_vol = s->sfx_vol; save.rumble = s->rumble; save.layout = s->layout;
+    save.shake = s->shake; save.difficulty = s->difficulty; save.style = s->style;
+}
+static int write_file(int slot, const SaveData *d) {
+    char p[256], tmp[256]; path(p, sizeof p, slot, ""); path(tmp, sizeof tmp, slot, ".tmp");
+    FILE *f = fopen(tmp, "wb"); if (!f) return 0;
+    size_t n = fwrite(d, 1, sizeof *d, f);
+    int ok = fclose(f) == 0 && n == sizeof *d;
+    if (!ok) { remove(tmp); return 0; }
+    remove(p);   /* rename() over an existing file isn't reliable on the Wii U's FAT card */
+    rename(tmp, p);   /* if this fails the .tmp is still a whole save, and read_file finds it */
+    return 1;
+}
+
+void save_load_settings(void) {
+    defaults(&save);
+    if (!enabled()) return;
+    SaveData s; if (read_file(-1, &s)) apply_settings(&s);
+}
+int save_peek(int slot, SaveData *out) {
+    if (!enabled()) return 0;
+    if (read_file(slot, out)) return 1;
+    if (slot == 0 && !getenv("MM_SAVE") && read_file(-2, out)) return 1;   /* the old single save becomes slot 1 */
+    return 0;
+}
+void save_load(void) {
+    SaveData keep = save;
+    defaults(&save);
+    if (!enabled()) { apply_settings(&keep); return; }
+    SaveData d; if (save_peek(save_slot, &d)) save = d;
+    apply_settings(&keep);   /* settings are the console's, not the slot's */
+}
+void save_use_slot(int slot) { save_slot = slot < 0 ? 0 : slot >= SAVE_SLOTS ? SAVE_SLOTS - 1 : slot; save_load(); }
 
 void save_reset_progress(void) {
-    SaveData keep = save; defaults();
-    save.music_vol = keep.music_vol; save.sfx_vol = keep.sfx_vol; save.rumble = keep.rumble; save.layout = keep.layout;
-    save.shake = keep.shake; save.difficulty = keep.difficulty; save.style = keep.style; save.seen_intro = keep.seen_intro; save.runner = keep.runner;
+    SaveData keep = save; defaults(&save); apply_settings(&keep);
+    save.seen_intro = keep.seen_intro; save.runner = keep.runner; save.outfit = 0;
 }
-
-void save_load(void) {
-    defaults();
+void save_erase_slot(int slot) {
     if (!enabled()) return;
-    char p[256]; path(p, sizeof p, "");
-    FILE *f = fopen(p, "rb");
-    if (!f) { path(p, sizeof p, ".tmp"); f = fopen(p, "rb"); }   /* a write that got cut off between remove and rename */
-    if (!f) return;
-    SaveData d; size_t n = fread(&d, 1, sizeof d, f); fclose(f);
-    if (n != sizeof d || d.magic != SAVE_MAGIC || d.version != SAVE_VERSION) return;
-    save = d;
-    /* never trust the file blindly */
-    for (int r = 0; r < 2; r++) if (save.reached[r] >= SAVE_SHOWS) save.reached[r] = SAVE_SHOWS - 1;
-    if (save.cont_level >= SAVE_SHOWS) save.cont_level = 0;
-    if (save.cont_loop > 1) save.cont_loop = 0;
-    for (int i = 0; i < SAVE_SHOWS; i++) { if (save.grade[i] > 4) save.grade[i] = 0; save.reels[i] &= 7; }
-    if (save.music_vol > 10) save.music_vol = 8;
-    if (save.sfx_vol > 10) save.sfx_vol = 8;
-    if (save.difficulty > 2) save.difficulty = 1;
-    if (save.layout > 1) save.layout = 0;
-    if (save.outfit > 4) save.outfit = 0;
-    if (save.style > 1) save.style = 0;
-    if (save.runner > 1) save.runner = 0;
+    char p[256]; path(p, sizeof p, slot, ""); remove(p); path(p, sizeof p, slot, ".tmp"); remove(p);
+    if (slot == 0 && !getenv("MM_SAVE")) { path(p, sizeof p, -2, ""); remove(p); }
 }
 
 void save_write(void) {
@@ -73,14 +121,12 @@ void save_write(void) {
 #endif
         mkdir(save_dir(), 0777);
     }
-    char p[256], tmp[256]; path(p, sizeof p, ""); path(tmp, sizeof tmp, ".tmp");
-    FILE *f = fopen(tmp, "wb"); if (!f) return;
-    size_t n = fwrite(&save, 1, sizeof save, f);
-    int ok = fclose(f) == 0 && n == sizeof save;
-    if (!ok) { remove(tmp); return; }
-    remove(p);   /* rename() over an existing file isn't reliable on the Wii U's FAT card */
-    if (rename(tmp, p) != 0) { /* keep the .tmp: it is still a whole save */ }
+    save.magic = SAVE_MAGIC; save.version = SAVE_VERSION;
+    int ok = write_file(save_slot, &save);
+    ok = write_file(-1, &save) && ok;
+    write_failed = !ok;
 }
+int save_write_failed(void) { return write_failed; }
 
 int save_total_reels(void) {
     int n = 0; for (int i = 0; i < SAVE_SHOWS; i++) for (int b = 0; b < 3; b++) n += (save.reels[i] >> b) & 1; return n;
