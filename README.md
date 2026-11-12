@@ -65,6 +65,21 @@ Property, Toy Chest, Luggage Hall, Doll Hospital, then The Claim Desk.
   umbrella spikes that track you and plunge, a barrage of thrown shoes, and the sack, which drags you toward him (run
   the other way). When he's angry he calls in toy soldiers.
 
+## Level 6: Encore (the finale)
+The grand finale back in the theatre, now burning and flooding with ink. Burning Lobby, The Balcony, Orchestra Pit,
+The Fly Loft, Curtain Call, then The Grand Stage.
+* Every enemy from the first five shows comes back for one last performance, plus **Understudies**: ink shadows of you
+  that run, jump and fire nails back.
+* **The Orchestra Pit floods**: the ink rises in waves; when you see the warning, get up on the music stands.
+* **The Fly Loft** drops sandbags on ropes, and the film frames, steam vents, saws and toy blocks all return.
+* **Final boss: Inky Unbound**, Uncle Inky's true form, a colossal ink kraken: building-sized tentacle slams that track
+  you, ink rain from the rafters, an eye beam that burns across the stage floor (jump it), and shadow understudies.
+  Break his porcelain face and his heart shows.
+
+## The ending and the second show
+Beat Encore and the curtain falls... but the projector is still running. Press A for the **second show**: all six shows
+again with faster, tougher enemies and bosses (the HUD says 2ND SHOW). Beat Inky Unbound again for the **true ending**.
+
 ## Gear (Ghosts 'n Goblins style)
 Full gear, then torn overalls (the hard hat flies off), then **boxers**, then you're out. GEAR crates put clothes back on.
 TOOLS crates drop a cycling weapon icon: grab it when it shows the one you want:
@@ -126,8 +141,12 @@ Drop the .ogg files into `engine/content/music` with these names; any that are m
 | `mm_level5` | Lost & Found | broken-lullaby organ rock with toy piano, music box and squeaky-toy percussion |
 | `mm_dolls` | Luggage Hall, Doll Hospital | the lullaby slowed and warped: ticking clock, porcelain clinks |
 | `mm_boss5` | The Collector | frantic organ-metal toy-box lullaby with a clanging service bell |
+| `mm_level6` | Encore | the main theme returns, bigger: organ, brass and metal with echoes of every show |
+| `mm_finale` | Fly Loft, Curtain Call | dread build-up: heartbeat kick, music box, choir-like organ |
+| `mm_boss6` | Inky Unbound | apocalyptic organ-metal waltz of the bandleader's theme |
+| `mm_ending` | ending / credits | the theme slow and glorious, winding down as the lights go out |
 
-All twenty tracks were generated in Runway around one shared D-minor organ theme, with LOOPSTART tags so loops skip the intros.
+All twenty-four tracks were generated in Runway around one shared D-minor organ theme, with LOOPSTART tags so loops skip the intros.
 
 ## Gore and effects
 Enemies bleed oil-blood on every hit and come apart when they die: the sprite is chopped into chunks, plus painted
