@@ -8,6 +8,10 @@
  * QA: MM_CHECK=1 prints impossible states (stuck in walls, fell out of the world, NaN positions, full enemy table),
  * MM_GOD=1 makes the runner invincible (pits send you to the checkpoint), MM_DRAW_EVERY=n draws every nth frame
  * without saving it (exercises the drawing code in headless runs). Build with -fsanitize=address,undefined for a full sweep.
+ * Front of house: MM_SCENE also takes select, options, extras, gallery, jukebox, wardrobe, intro, credits, rush, loadN.
+ * MM_SAVE=path uses that save file (headless runs otherwise save nothing), MM_DIFF=0..2 sets the difficulty,
+ * MM_TX=n starts the runner at tile n, MM_DUMPMAP=1 prints each built show (with where its new stretches went),
+ * MM_UNLOCK=1 opens the boss rush.
  */
 #include <SDL.h>
 #include <SDL_image.h>
@@ -53,8 +57,9 @@ static unsigned read_pad(SDL_GameController *gc) {
     if (ax < -12000) k |= B_LEFT; if (ax > 12000) k |= B_RIGHT;
     if (ay < -14000) k |= B_UP;   if (ay > 14000) k |= B_DOWN;
     /* Nintendo layout (SDL names are swapped): A (right) jumps... same as The Tolling: B jumps, A/Y shoot */
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_B)) k |= B_JUMP;
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_A)) k |= B_SHOOT;
+    int swap = game_layout();   /* Options: "A JUMPS / B SHOOTS" */
+    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_B)) k |= swap ? B_SHOOT : B_JUMP;
+    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_A)) k |= swap ? B_JUMP : B_SHOOT;
     if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_Y)) k |= B_SHOOT;
     if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_X)) k |= B_LIGHTS;
     if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)) k |= B_LOCK;
@@ -148,6 +153,10 @@ int main(int argc, char **argv) {
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
             if (ev.type == SDL_QUIT) running = 0;
+            if (ev.type == SDL_APP_WILLENTERBACKGROUND) game_focus_lost();   /* HOME button */
+#ifdef __WIIU__
+            if (ev.type == SDL_WINDOWEVENT && ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST) game_focus_lost();
+#endif
             if (ev.type == SDL_KEYDOWN && ev.key.keysym.scancode == SDL_SCANCODE_ESCAPE) running = 0;
             if (ev.type == SDL_CONTROLLERDEVICEADDED) {
                 SDL_GameController *c = SDL_GameControllerOpen(ev.cdevice.which);
@@ -182,6 +191,8 @@ int main(int argc, char **argv) {
                 con[i] = headless ? (i < fake_pads) : (i == 0 || gc[i] != NULL);
             }
             game_step(in, con); frame++;
+            for (int i = 0; i < MAX_PADS; i++) { float st; int ms;
+                if (game_take_rumble(i, &st, &ms) && gc[i]) SDL_GameControllerRumble(gc[i], (Uint16)(st * 0xFFFF), (Uint16)(st * 0xC000), (Uint32)ms); }
             if (check) game_check(frame);
             if (maxf > 0 && frame >= maxf) running = 0;
             if (game_wants_quit()) running = 0;

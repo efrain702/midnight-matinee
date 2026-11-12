@@ -2,3 +2,4 @@ build/
 build_pc/
 *.rpx
 *.wuhb
+__pycache__/
