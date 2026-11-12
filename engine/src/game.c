@@ -119,6 +119,8 @@ static void iris_track(void);
 static void draw_iris(void);
 static void draw_aftermath(void);
 static void open_slots(void);
+static void vo(int chr, const char *line);
+static const char *land_sfx(void);
 static void to_press(void);
 static void start_demo(void);
 static Tex aftermath_tex, ego_tex, keyart_tex, iris_tex;
@@ -557,6 +559,7 @@ static const char *WEAP_NAME[NWEAP] = {"NAIL GUN", "RIVET SPREAD", "WELDING TORC
 typedef struct {
     int active, pad, alive, gear, lives, face, onground, hidden, crouch, weapon, aim_dx, aim_dy, shooting, closet_tx, chr;
     float x, y, vx, vy, inv, cool, anim, dead_t, shoot_t, bob, safe_x, safe_y;   /* safe: last solid ground (Matinee pits) */
+    float land_t, jump_t, turn_t, hurt_t, idle_t, step_t; int was_ground, prev_face;   /* cartoon squash & stretch, flinch, idle */
 } Player;
 static Player pl[2];
 static int mode;            /* 0 solo (GamePad does everything), 1 security office co-op */
@@ -693,6 +696,7 @@ static void reset_player(Player *p, int full) {
     int tx = checkpoints[cur_check];
     p->x = tx * TILE + TILE / 2 + (p == &pl[1] ? 40 : 0); p->y = FLOOR_Y - 2; p->vx = p->vy = 0;
     p->alive = 1; p->gear = 3; p->inv = 2.0f; p->hidden = 0; p->face = 1; p->dead_t = 0; p->safe_x = p->x; p->safe_y = p->y;
+    p->prev_face = 1; p->was_ground = 1; p->land_t = p->jump_t = p->turn_t = p->hurt_t = p->idle_t = 0;
     if (p1_char < 0) p1_char = getenv("MM_CHAR") ? atoi(getenv("MM_CHAR")) % NCHARS : save.runner % NCHARS;
     p->chr = p == &pl[0] ? p1_char : (p1_char + 1) % NCHARS;
     if (full) { p->lives = difficulty() == 0 ? 5 : difficulty() == 2 ? 2 : 3; p->weapon = getenv("MM_WEAPON") ? atoi(getenv("MM_WEAPON")) % NWEAP : W_NAIL; }
@@ -722,6 +726,8 @@ static void hurt_player(Player *p, float from_x) {
     p->gear--; p->inv = 1.6f; shake = 8;
     p->vx = (p->x < from_x ? -1 : 1) * 260; p->vy = -420;
     sfx("hurt"); rumble_pad(p->pad, p->gear <= 0 ? 1.0f : 0.6f, p->gear <= 0 ? 450 : 220);
+    p->hurt_t = 0.45f;
+    if (p->gear <= 0) { vo(p->chr, "ko"); sfx("dizzy"); } else if (rand() % 2 == 0) vo(p->chr, "hurt");
     if (p->gear == 2) { for (int i = 0; i < 6; i++) part(p->x, p->y - 140, (frand() - 0.5f) * 300, -300 - frand() * 200, 0.9f, 9, 900, 230, 180, 50, 0); message("THERE GOES THE HARD HAT!", 1.4f); }
     if (p->gear == 1) { for (int i = 0; i < 10; i++) part(p->x, p->y - 70, (frand() - 0.5f) * 400, -300 - frand() * 200, 1.0f, 8, 900, 70, 100, 150, 0); message(p->chr == 1 ? "DOWN TO YOUR UNDERSHIRT!" : "DOWN TO YOUR BOXERS!", 1.4f); }
     if (p->gear <= 0) { p->alive = 0; p->dead_t = 0; p->vy = -700; sfx("boom"); ink_burst(p->x, p->y - 60, 20, 300); }
@@ -820,7 +826,7 @@ void game_init(void) {
     ego_tex = load_or_empty("ui/ego.jpg"); keyart_tex = load_or_empty("ui/keyart.jpg"); iris_tex = make_iris();
     p1_char = getenv("MM_CHAR") ? atoi(getenv("MM_CHAR")) % NCHARS : save.runner % NCHARS;
     if (getenv("MM_DIFF")) save.difficulty = (unsigned char)(atoi(getenv("MM_DIFF")) % 3);   /* tests */
-    scene = SC_LOGO; scene_t = 0; sfx("power");   /* boot: studio logo -> press start -> save slots -> title */
+    scene = SC_LOGO; scene_t = 0; sfx("power"); sfx("ann_logo");   /* boot: studio logo -> press start -> save slots -> title */
 }
 void game_init_pad(void) {
     font_load(&padFont, "font"); font_load(&padSmall, "font_small"); padDisc = make_circle_tex(32);
@@ -962,7 +968,7 @@ static void update_player(Player *p, const Input *in) {
     }
     /* flip a breaker */
     if ((pr_ & B_UP) && p->onground) for (int i = 0; i < nbreak; i++) if (!breakers[i].used && abs(breakers[i].tx - ctx) <= 1) {
-        breakers[i].used = 1; power = clampf(power + 40, 0, 100); sfx("power"); message("BREAKER ON: +40% POWER", 1.6f);
+        breakers[i].used = 1; power = clampf(power + 40, 0, 100); sfx("power"); vo(p->chr, "lights"); message("BREAKER ON: +40% POWER", 1.6f);
         spark_burst(breakers[i].tx * TILE + 24, 11 * TILE + 20, 20, 255, 230, 120);
     }
 
@@ -981,12 +987,23 @@ static void update_player(Player *p, const Input *in) {
     else if (D && lock) { p->aim_dy = 1; p->aim_dx = (L || R) ? p->face : 0; }
 
     int drop = D && (pr_ & B_JUMP) && p->onground && oneway_at(ctx, (int)(p->y / TILE));
-    if ((pr_ & B_JUMP) && p->onground && !drop) { p->vy = -920; p->onground = 0; sfx("jump"); }
+    if ((pr_ & B_JUMP) && p->onground && !drop) { p->vy = -920; p->onground = 0; sfx("jump"); p->jump_t = 0.16f; smoke(p->x, p->y - 4, 2, 170); }
     if (!(h & B_JUMP) && p->vy < -300) p->vy += 3600 * DT;    /* short hop when the button is let go */
     p->vy += 2500 * DT; if (p->vy > 1300) p->vy = 1300;
     float w = 46, hh = p->crouch ? 80 : 124;
+    float vy_before = p->vy;
     int r = move_box(&p->x, &p->y, &p->vx, &p->vy, w, hh, drop);
     p->onground = (r & 1) != 0;
+    /* cartoon timing: squash on landing, a puff of dust, a turn that flips through the middle */
+    if (p->onground && !p->was_ground && vy_before > 450) { p->land_t = 0.14f; smoke(p->x, p->y - 4, vy_before > 900 ? 5 : 3, 175); sfx(land_sfx()); }
+    p->was_ground = p->onground;
+    if (p->face != p->prev_face) { if (p->onground) p->turn_t = 0.1f; p->prev_face = p->face; }
+    if (p->land_t > 0) p->land_t -= DT;
+    if (p->jump_t > 0) p->jump_t -= DT;
+    if (p->turn_t > 0) p->turn_t -= DT;
+    if (p->hurt_t > 0) p->hurt_t -= DT;
+    if (p->onground && fabsf(p->vx) > 200) { p->step_t -= DT; if (p->step_t <= 0) { p->step_t = 0.26f; part_k(PK_SMOKE, p->x - p->face * 14, p->y - 4, -p->face * 40, -30, 0.45f, 7, -10, 170, 160, 150, 0); } }
+    p->idle_t = (p->onground && fabsf(p->vx) < 20 && !(h & (B_SHOOT | B_LOCK))) ? p->idle_t + DT : 0;
     if (p->onground) conveyor_carry(&p->x, &p->y, w, hh);
     if (arena_locked) p->x = clampf(p->x, ARENA_X + 30, ARENA_X + SCREEN_W - 30);
     p->x = clampf(p->x, 30, LW * TILE - 30);
@@ -1656,6 +1673,7 @@ static void update_fiend(void) {
 /* ------------------------------------------------------------ boss: Uncle Inky */
 enum { BS_INTRO, BS_IDLE, BS_SLAM_AIM, BS_SLAM_HIT, BS_NOTES, BS_SWEEP_WARN, BS_SWEEP, BS_TICKETS, BS_DEAD, BS_WARP };
 static void boss_start(void) {
+    sfx("boss_sting");
     boss.active = 1; boss.state = BS_INTRO; boss.timer = 2.6f; boss.maxhp = boss.hp = LEVELS[level_no].boss_hp; boss.face = -1;
     if (loop_no) boss.maxhp = boss.hp = boss.hp * 13 / 10;   /* second run: tougher bosses */
     if (difficulty() == 0) boss.maxhp = boss.hp = boss.hp * 7 / 10;
@@ -2841,7 +2859,7 @@ static void game_step_inner(const Input pads[MAX_PADS], const int connected[MAX_
         camx += (want - camx) * (arena_locked ? 0.08f : 0.18f);
     }
     /* game over */
-    if (!pl[0].active && !pl[1].active) { scene = SC_OVER; scene_t = 0; over_sel = 0; music_play("mm_gameover", 0); }
+    if (!pl[0].active && !pl[1].active) { scene = SC_OVER; scene_t = 0; over_sel = 0; music_play("mm_gameover", 0); if (!demo_on) sfx("ann_over"); }
 }
 
 /* ------------------------------------------------------------ drawing: TV */
@@ -3136,8 +3154,18 @@ static void draw_player(Player *p, float ox, float oy) {
     float x = sx(p->x) + ox, y = p->y + oy + 4;
     draw_ellipse(&A.disc, x, FLOOR_Y + oy - 2 > y ? y - 2 : y - 2, 34, 7, 0, 0, 0, p->onground ? 90 : 40);
     { Tex *t = &A.hero[p->chr][set][fr];
-      if (save.outfit && t->tex) { float w = t->w, h = t->h * sy; draw_tex_tint(t, x - w / 2, y - h, w, h, !(p->face > 0), OUTFIT_RGB[save.outfit][0], OUTFIT_RGB[save.outfit][1], OUTFIT_RGB[save.outfit][2], 255, ang); }
-      else draw_sprite(t, x, y, 1, p->face > 0, 0, 255, ang, sy); }
+      float sxk = 1; int face_r = p->face > 0;
+      if (p->land_t > 0) { float k = p->land_t / 0.14f; sy *= 1 - 0.2f * k; sxk *= 1 + 0.22f * k; }
+      if (p->jump_t > 0) { float k = p->jump_t / 0.16f; sy *= 1 + 0.16f * k; sxk *= 1 - 0.13f * k; }
+      if (p->turn_t > 0) { float k = p->turn_t / 0.1f; sxk *= 0.35f + 0.65f * fabsf(cosf(k * 3.14159f)); }
+      if (p->idle_t > 5 && fmodf(p->idle_t - 5, 4.0f) > 3.0f) face_r = !face_r;   /* standing still: glance over the shoulder now and then */
+      Uint8 r = OUTFIT_RGB[save.outfit][0], g = OUTFIT_RGB[save.outfit][1], b = OUTFIT_RGB[save.outfit][2];
+      if (p->hurt_t > 0 && p->alive) { float k = p->hurt_t / 0.45f; ang += -p->face * 12 * k; g = (Uint8)(g * (1 - 0.5f * k)); b = (Uint8)(b * (1 - 0.5f * k)); sy *= 1 - 0.08f * k; }
+      if (t->tex) { float w = t->w * sxk, hgt = t->h * sy; draw_tex_tint(t, x - w / 2, y - hgt, w, hgt, !face_r, r, g, b, 255, ang); } }
+    if ((p->hurt_t > 0 && p->alive) || (!p->alive && p->dead_t < 1.2f)) {   /* cartoon stars circling the head */
+        float hy = p->alive ? y - 150 : y - 110;
+        for (int k = 0; k < 3; k++) { float a = scene_t * 7 + k * 2.094f, sxp = x + cosf(a) * 34, syp = hy + sinf(a) * 9;
+            draw_glow(&A.disc, sxp, syp, 12, 255, 220, 90, 200); draw_bar(sxp - 7, syp, sxp + 7, syp, 3, 255, 240, 140, 255); draw_bar(sxp, syp - 7, sxp, syp + 7, 3, 255, 240, 140, 255); } }
     if (p->shoot_t > 0.08f) {
         float mx = x + p->face * 52, my = y - 82;
         if (p->aim_dy < 0 && p->aim_dx) { mx = x + p->face * 50; my = y - 130; } else if (p->aim_dy < 0) { mx = x + p->face * 18; my = y - 160; }
@@ -3792,6 +3820,7 @@ static void finish_load(void) {
 static void show_cleared(void) {
     scene = SC_CLEAR; scene_t = 0; music_play("mm_clear", 0); show_newbest = 0;
     if (demo_on) return;
+    vo(pl[0].active ? pl[0].chr : pl[1].chr, "win");
     load_aftermath(level_no);
     if (rush_on) return;
     int L = level_no, sc = score - show_score0;
@@ -4282,7 +4311,7 @@ static void update_reels(void) {
             if (fabsf(p->x - r->x) < 48 && p->y - 130 < r->y + 24 && p->y > r->y - 30) {
                 r->live = 0; reels_run |= 1 << k; spark_burst(r->x, r->y, 30, 255, 220, 120); ring(r->x, r->y, 90, 255, 220, 140);
                 if (!((save.reels[level_no] >> k) & 1)) {
-                    save.reels[level_no] |= (unsigned char)(1 << k); game_save(); sfx("coin"); sfx("checkpoint"); rumble_pad(p->pad, 0.4f, 180);
+                    save.reels[level_no] |= (unsigned char)(1 << k); game_save(); sfx("reel"); vo(p->chr, "reel"); rumble_pad(p->pad, 0.4f, 180);
                     char b[64]; snprintf(b, sizeof b, "FILM REEL FOUND!  %d / 3 IN THIS SHOW", popcount3(save.reels[level_no])); message(b, 2.2f);
                 } else { sfx("coin"); message("YOU ALREADY HAVE THIS REEL", 1.2f); }
                 break;
@@ -4311,7 +4340,7 @@ static int step_front(const Input pads[MAX_PADS], unsigned anyp, unsigned anyh) 
     (void)pads;
     switch (scene) {
     case SC_LOGO: if (scene_t > 3.3f || (scene_t > 0.5f && anyp)) to_press(); return 1;
-    case SC_PRESS: if (anyp & (OK_BITS() | B_START)) { sfx("checkpoint"); open_slots(); } else if (scene_t > 25) start_demo(); return 1;
+    case SC_PRESS: if (anyp & (OK_BITS() | B_START)) { sfx("confirm"); open_slots(); } else if (scene_t > 25) start_demo(); return 1;
     case SC_SLOTS: step_slots(anyp); return 1;
     case SC_TITLE: step_title(anyp); return 1;
     case SC_SELECT: step_select(anyp); return 1;
@@ -4327,6 +4356,7 @@ static int step_front(const Input pads[MAX_PADS], unsigned anyp, unsigned anyh) 
         if (ld.pending) { if (scene_t > 0.05f) { float t = scene_t; finish_load(); scene = SC_LOAD; scene_t = t; } return 1; }
         if (scene_t > 2.6f || (scene_t > 0.8f && (anyp & OK_BITS()))) {
             scene = SC_PLAY; scene_t = 0; char b[64];
+            if (!demo_on) vo(pl[0].chr, "go");
             if (rush_on) snprintf(b, sizeof b, "BOSS %d: %s", level_no + 1, LEVELS[level_no].boss_name);
             else if (loop_no && level_no == 0 && ld.keep == 2) snprintf(b, sizeof b, "THE SECOND SHOW: EVERYTHING IS FASTER AND MEANER");
             else snprintf(b, sizeof b, "SHOW %d: %s", level_no + 1, LEVELS[level_no].title);
@@ -4349,6 +4379,8 @@ static int step_front(const Input pads[MAX_PADS], unsigned anyp, unsigned anyh) 
         }
         return 1;
     case SC_CLEAR:
+        { static int said = 0; if (scene_t < 0.1f) said = 0;
+          if (!said && scene_t >= after_len() + 0.2f && !rush_on && !demo_on) { said = 1; sfx("ann_clear"); } }
         if (scene_t < after_len()) { if (scene_t > 0.6f && (anyp & OK_BITS())) scene_t = after_len(); return 1; }
         if (scene_t > after_len() + 2.0f && (anyp & OK_BITS())) {
             if (rush_on) {
@@ -4524,7 +4556,7 @@ static void draw_iris(void) {
 }
 
 /* ---- boot: studio logo, then press start ---- */
-static void to_press(void) { scene = SC_PRESS; scene_t = 0; music_play("mm_title", 1); }
+static void to_press(void) { static int said; scene = SC_PRESS; scene_t = 0; music_play("mm_title", 1); sfx("iris"); if (!said) { said = 1; sfx("ann_title"); } }
 static void draw_logo(void) {
     fill_rect(0, 0, SCREEN_W, SCREEN_H, 0, 0, 0, 255);
     float t = scene_t, a = clampf(fminf(t / 0.5f, (3.3f - t) / 0.5f), 0, 1);
@@ -4559,7 +4591,7 @@ static void step_slots(unsigned anyp) {
         return;
     }
     if (anyp & OK_BITS()) {
-        sfx("checkpoint"); save_use_slot(slot_sel);
+        sfx("confirm"); save_use_slot(slot_sel);
         p1_char = getenv("MM_CHAR") ? atoi(getenv("MM_CHAR")) % NCHARS : save.runner % NCHARS;
         save_write();   /* claims the slot, and tells us at once if the SD card is locked */
         scene = SC_TITLE; scene_t = 0; menu_sel = 1;
@@ -4659,3 +4691,7 @@ static void draw_aftermath(void) {
     fill_rect(0, SCREEN_H - 96, SCREEN_W, 96, 8, 3, 2, (Uint8)(200 * a));
     draw_text_col(&A.font, AFTER_LINE[level_no], SCREEN_W / 2, SCREEN_H - 78, 0.62f, 1, 255, 236, 190, (Uint8)(255 * a));
 }
+
+/* ---- voices and surfaces ---- */
+static void vo(int chr, const char *line) { char b[32]; snprintf(b, sizeof b, "vo_%s_%s", chr == 1 ? "rosie" : "joe", line); sfx(b); }
+static const char *land_sfx(void) { return level_no == L_PIZZA ? "land_tile" : (level_no == L_INK || level_no == L_ROOF) ? "land_metal" : "land_wood"; }

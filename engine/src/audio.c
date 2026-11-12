@@ -11,7 +11,11 @@ static Mix_Music *cur = NULL;
 static char cur_name[64];
 static const char *SFX[] = {"jump", "throw", "rivet", "sizzle", "boing", "hit", "hurt", "boom", "slam", "pickup", "checkpoint",
     "splash", "menu", "poof", "shatter", "clank", "charge", "power", "beam", "summon", "angry", "tick", "spit", "roar1", "roar2",
-    "coin", "thunder", "casing", "lights", "closet", "fiendwarn", "splat"};
+    "coin", "thunder", "casing", "lights", "closet", "fiendwarn", "splat",
+    "land_wood", "land_metal", "land_tile", "reel", "iris", "boss_sting", "confirm", "dizzy",
+    "vo_joe_hurt", "vo_joe_lights", "vo_joe_reel", "vo_joe_go", "vo_joe_win", "vo_joe_ko",
+    "vo_rosie_hurt", "vo_rosie_lights", "vo_rosie_reel", "vo_rosie_go", "vo_rosie_win", "vo_rosie_ko",
+    "ann_logo", "ann_title", "ann_clear", "ann_over"};
 #define NSFX (int)(sizeof SFX / sizeof *SFX)
 static Mix_Chunk *chunks[NSFX];
 
@@ -19,7 +23,7 @@ void audio_init(void) {
     if (getenv("MM_MUTE")) return;
     if (Mix_OpenAudio(48000, AUDIO_S16SYS, 2, 2048) < 0) { SDL_Log("audio: %s", Mix_GetError()); return; }
     Mix_Init(MIX_INIT_OGG);
-    Mix_AllocateChannels(24);
+    Mix_AllocateChannels(32);
     char rel[64];
     for (int i = 0; i < NSFX; i++) {
         snprintf(rel, sizeof rel, "sfx/%s.wav", SFX[i]);
