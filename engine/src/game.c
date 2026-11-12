@@ -26,6 +26,411 @@ static float frand(void) { return rand() / (float)RAND_MAX; }
 static float clampf(float v, float a, float b) { return v < a ? a : v > b ? b : v; }
 static float signf(float v) { return v < 0 ? -1.0f : 1.0f; }
 
+/* ==================================================================================================
+   ESPAÑOL: every string on its way to the screen goes through TR(). Longest English phrases are matched
+   first, at word boundaries, in one left-to-right pass, so built strings ("SHOW 3: PIZZA PARTY") translate too.
+   ================================================================================================== */
+static const char *const TR_TAB[][2] = {
+    {"UNCLE INKY IS BACK, AND HIS SHOW NEVER ENDS. KEEP THE LIGHTS ON. SURVIVE THE MATINEE.", "EL T\x04""O INKY HA VUELTO Y SU FUNCI\x05""N NUNCA TERMINA. MANT\x03""N LA LUZ. SOBREVIVE A LA MATIN\x03""E."},
+    {"BUT THE MOMENT THE LIGHTS CAME UP, THE OLD PROJECTOR STARTED ROLLING ALL BY ITSELF.", "PERO EN CUANTO VOLVI\x05"" LA LUZ, EL VIEJO PROYECTOR SE ENCENDI\x05"" SOLITO."},
+    {"THE GAMEPAD RUNS THE SECURITY CAMERAS: TAP A FEED, PING ENEMIES, HIT THE LIGHTS.", "EL GAMEPAD CONTROLA LAS C\x02""MARAS: TOCA UNA, MARCA ENEMIGOS, ENCIENDE LAS LUCES."},
+    {"JOE AND ROSIE TOOK THE NIGHT SHIFT: GET THE OLD PLACE'S POWER BACK ON.", "JOE Y ROSIE TOMARON EL TURNO DE NOCHE: DEVOLVERLE LA LUZ AL VIEJO TEATRO."},
+    {"MIDNIGHT. THE GRAND MATINEE THEATRE HAS BEEN DARK FOR FIFTY YEARS...", "MEDIANOCHE. EL GRAN TEATRO MATIN\x03""E LLEVA CINCUENTA A\x01""OS A OSCURAS..."},
+    {"A SECOND PLAYER CAN JUMP IN ANY TIME: PRESS + ON ANOTHER CONTROLLER.", "UN SEGUNDO JUGADOR PUEDE ENTRAR CUANDO QUIERA: PULSA + EN OTRO CONTROL."},
+    {"PRESS [OK] - THEN THE SECOND SHOW (HARDER - THE TRUE ENDING AWAITS)", "PULSA [OK] - LUEGO LA SEGUNDA FUNCI\x05""N (M\x02""S DIF\x04""CIL - TE ESPERA EL FINAL VERDADERO)"},
+    {"BEAT A SHOW IN UNDER SIX MINUTES WITHOUT A KNOCKOUT FOR AN S RANK.", "TERMINA UNA FUNCI\x05""N EN MENOS DE SEIS MINUTOS SIN CAER PARA UN RANGO S."},
+    {"THE SD CARD IS LOCKED OR MISSING - PROGRESS WON'T BE SAVED", "LA TARJETA SD EST\x02"" BLOQUEADA O NO EST\x02"" - NO SE GUARDAR\x02"" EL PROGRESO"},
+    {"IN THE DARK, EVERYTHING GETS FASTER. KEEP THE POWER UP!", "EN LA OSCURIDAD TODO VA M\x02""S R\x02""PIDO. \x08""MANT\x03""N LA ENERG\x04""A!"},
+    {"WHICH ONE IS THE REAL MADAME? (THE FAKES ARE BACKWARDS)", "\x07""CU\x02""L ES LA VERDADERA MADAME? (LAS FALSAS EST\x02""N AL REV\x03""S)"},
+    {"HOLD R TO PLANT YOUR FEET AND AIM IN EIGHT DIRECTIONS.", "MANT\x03""N R PARA QUEDARTE QUIETO Y APUNTAR EN OCHO DIRECCIONES."},
+    {"THE NIGHT CREW CLOCKS OUT. THE SHOW IS OVER FOR GOOD.", "EL TURNO DE NOCHE TERMINA. LA FUNCI\x05""N SE ACAB\x05"" PARA SIEMPRE."},
+    {"CONNECT A WII REMOTE OR PRO CONTROLLER FOR THE RUNNER", "CONECTA UN WIIMOTE O UN PRO CONTROLLER PARA EL CORREDOR"},
+    {"THREE FILM REELS ARE HIDDEN IN EVERY SHOW. LOOK UP!", "HAY TRES ROLLOS DE PEL\x04""CULA ESCONDIDOS EN CADA FUNCI\x05""N. \x08""MIRA ARRIBA!"},
+    {"FLIP A BREAKER (PRESS UP) TO KEEP THE LIGHTS ON.", "SUBE UN INTERRUPTOR (ARRIBA) PARA MANTENER LA LUZ."},
+    {"CO-OP: RUNNER USES A WII REMOTE / PRO CONTROLLER", "COOPERATIVO: EL CORREDOR USA UN WIIMOTE / PRO CONTROLLER"},
+    {"THE SECOND SHOW: EVERYTHING IS FASTER AND MEANER", "LA SEGUNDA FUNCI\x05""N: TODO ES M\x02""S R\x02""PIDO Y M\x02""S MALO"},
+    {"SOLO: THIS GAMEPAD RUNS AND WATCHES THE CAMERAS", "SOLO: ESTE GAMEPAD CORRE Y VIGILA LAS C\x02""MARAS"},
+    {"LOST: ONE COLLECTOR. NOBODY CAME TO CLAIM HIM.", "PERDIDO: UN COLECCIONISTA. NADIE VINO A RECLAMARLO."},
+    {"PRESS + TO PAUSE. THE SHOW WILL WAIT FOR YOU.", "PULSA + PARA PAUSAR. LA FUNCI\x05""N TE ESPERA."},
+    {"FIND MORE FILM REELS TO UNLOCK THIS OUTFIT", "ENCUENTRA M\x02""S ROLLOS PARA DESBLOQUEAR ESTE TRAJE"},
+    {"BREAK CRATES: SOME HIDE A FRESH HARD HAT.", "ROMPE CAJAS: ALGUNAS ESCONDEN UN CASCO NUEVO."},
+    {"THE LIGHTS COME UP. THE INK DRAINS AWAY.", "SE ENCIENDEN LAS LUCES. LA TINTA SE ESCURRE."},
+    {"FIND THIS SHOW'S FILM REEL TO DEVELOP IT", "ENCUENTRA EL ROLLO DE ESTA FUNCI\x05""N PARA REVELARLO"},
+    {"THE BOSSES TAKE A BOW... AT YOUR EXPENSE", "LOS JEFES SALUDAN AL P\x06""BLICO... A TU COSTA"},
+    {"UNCLE INKY KEEPS HIS THEATRE... FOR NOW", "EL T\x04""O INKY SE QUEDA CON SU TEATRO... POR AHORA"},
+    {"FINISH THE BOSS RUSH IN UNDER 8 MINUTES", "TERMINA EL DESFILE DE JEFES EN MENOS DE 8 MINUTOS"},
+    {"THE SHOW IS PAUSED - PRESS + TO RESUME", "FUNCI\x05""N EN PAUSA - PULSA + PARA SEGUIR"},
+    {"SAVE DATA ERASED. A FRESH SHOW AWAITS.", "DATOS BORRADOS. UNA NUEVA FUNCI\x05""N TE ESPERA."},
+    {"CAMERAS OFFLINE UNTIL THE SHOW STARTS", "C\x02""MARAS APAGADAS HASTA QUE EMPIECE LA FUNCI\x05""N"},
+    {"A FAKE! SEVEN YEARS BAD LUCK FOR HER!", "\x08""UNA FALSA! \x08""SIETE A\x01""OS DE MALA SUERTE PARA ELLA!"},
+    {"UNCLE INKY'S BATON HAS BEEN RETIRED.", "LA BATUTA DEL T\x04""O INKY SE HA JUBILADO."},
+    {"THE KITCHEN IS CLOSED. PERMANENTLY.", "LA COCINA EST\x02"" CERRADA. PARA SIEMPRE."},
+    {"THE INK DRAINS AWAY... OR DOES IT?", "LA TINTA SE ESCURRE... \x07""O NO?"},
+    {"IT'S HERE! HIDE IN A PROP CLOSET!", "\x08""YA LLEG\x05""! \x08""ESC\x05""NDETE EN UN ARMARIO!"},
+    {"HIS HEART IS SHOWING! AIM FOR IT!", "\x08""SE LE VE EL CORAZ\x05""N! \x08""APUNTA AH\x04""!"},
+    {"KEEP PLAYING TO UNLOCK THIS TRACK", "SIGUE JUGANDO PARA DESBLOQUEAR ESTA CANCI\x05""N"},
+    {"BEAT SHOW 8 TO OPEN THE BOSS RUSH", "TERMINA LA FUNCI\x05""N 8 PARA ABRIR EL DESFILE DE JEFES"},
+    {"THE CURTAIN FALLS ON UNCLE INKY!", "\x08""CAE EL TEL\x05""N PARA EL T\x04""O INKY!"},
+    {"HIS NAME IS NO LONGER IN LIGHTS.", "SU NOMBRE YA NO BRILLA EN LA MARQUESINA."},
+    {"HE'S CALLING DOWN THE LIGHTNING!", "\x08""EST\x02"" LLAMANDO A LOS RAYOS!"},
+    {"HIS UNDERSTUDIES TAKE THE STAGE!", "\x08""SUS SUPLENTES SALEN AL ESCENARIO!"},
+    {"SOMETHING IS MOVING BACKSTAGE...", "ALGO SE MUEVE TRAS BAMBALINAS..."},
+    {"UNCLE INKY IS FINALLY AT REST...", "EL T\x04""O INKY POR FIN DESCANSA..."},
+    {"EVERYTHING THE THEATRE EVER LOST", "TODO LO QUE EL TEATRO PERDI\x05"""},
+    {"PRESS AGAIN TO ERASE EVERYTHING!", "\x08""PULSA OTRA VEZ PARA BORRAR TODO!"},
+    {"LIGHTNING ROD! HE TOOK THE HIT!", "\x08""PARARRAYOS! \x08""\x03""L SE LLEV\x05"" EL GOLPE!"},
+    {"THE INK IS RISING! GET UP HIGH!", "\x08""SUBE LA TINTA! \x08""VE A LO ALTO!"},
+    {"ART, ANIMATION, MUSIC AND SOUND", "ARTE, ANIMACI\x05""N, M\x06""SICA Y SONIDO"},
+    {"BEAT A SHOW WITHOUT GETTING HIT", "TERMINA UNA FUNCI\x05""N SIN RECIBIR GOLPES"},
+    {"BEAT A BOSS WITHOUT GETTING HIT", "VENCE A UN JEFE SIN RECIBIR GOLPES"},
+    {"SEE YOU AT THE NEXT MATINEE...", "NOS VEMOS EN LA PR\x05""XIMA MATIN\x03""E..."},
+    {"PRESS [OK] TO ROLL THE CREDITS", "PULSA [OK] PARA VER LOS CR\x03""DITOS"},
+    {"YOUR NAME IN LIGHTS... FOREVER", "TU NOMBRE EN LUCES... PARA SIEMPRE"},
+    {"BEAT A SHOW IN UNDER 4 MINUTES", "TERMINA UNA FUNCI\x05""N EN MENOS DE 4 MINUTOS"},
+    {"BEAT A SHOW ON MIDNIGHT (HARD)", "TERMINA UNA FUNCI\x05""N EN MEDIANOCHE (DIF\x04""CIL)"},
+    {"LIGHTS OUT FOR THE HEADLINER!", "\x08""SE LE APAGAN LAS LUCES AL ESTELAR!"},
+    {"IT PRINTS NOTHING BUT TROUBLE", "SOLO IMPRIME PROBLEMAS"},
+    {"THE BANDLEADER WHO NEVER LEFT", "EL DIRECTOR DE BANDA QUE NUNCA SE FUE"},
+    {"THE CHEF WHO ATE THE BIRTHDAY", "EL CHEF QUE SE COMI\x05"" EL CUMPLEA\x01""OS"},
+    {"ZL / ZR OR TAP: SWITCH CAMERA", "ZL / ZR O TOCA: CAMBIAR C\x02""MARA"},
+    {"BEAT A SHOW IN SECURITY CO-OP", "TERMINA UNA FUNCI\x05""N EN COOP DE SEGURIDAD"},
+    {"HE'S TRYING TO BAG YOU! RUN!", "\x08""TE QUIERE METER EN SU COSTAL! \x08""CORRE!"},
+    {"SHE SUMMONS YOUR REFLECTION!", "\x08""INVOCA TU REFLEJO!"},
+    {"REACH THIS SHOW TO UNLOCK IT", "LLEGA A ESTA FUNCI\x05""N PARA DESBLOQUEARLA"},
+    {"SPLASH! BACK ON SOLID GROUND", "\x08""SPLASH! DE VUELTA EN TIERRA FIRME"},
+    {"UP ON THE ROOF, IN THE STORM", "EN LA AZOTEA, BAJO LA TORMENTA"},
+    {"SHE CUTS EVERY PICTURE SHORT", "CORTA TODAS LAS PEL\x04""CULAS"},
+    {"UNCLE INKY'S JAMBOREE PALACE", "EL PALACIO DE FIESTA DEL T\x04""O INKY"},
+    {"BEAT A SHOW WITH TWO PLAYERS", "TERMINA UNA FUNCI\x05""N CON DOS JUGADORES"},
+    {"GHOST LIGHT LIT: CHECKPOINT", "LUZ FANTASMA ENCENDIDA: PUNTO DE CONTROL"},
+    {"NO ANIMATRONICS WERE HARMED", "NING\x06""N ANIMATR\x05""NICO SALI\x05"" HERIDO"},
+    {"UNDEVELOPED: FIND FILM REEL", "SIN REVELAR: ENCUENTRA EL ROLLO"},
+    {"EARN S RANKS ON ALL 8 SHOWS", "CONSIGUE RANGO S EN LAS 8 FUNCIONES"},
+    {"YOU ALREADY HAVE THIS REEL", "YA TIENES ESTE ROLLO"},
+    {"HIDING... (UP TO COME OUT)", "ESCONDIDO... (ARRIBA PARA SALIR)"},
+    {"LIGHTS SCARE THE INK FIEND", "LAS LUCES ASUSTAN AL DEMONIO DE TINTA"},
+    {"POWER OUT! FIND A BREAKER", "\x08""SIN LUZ! BUSCA UN INTERRUPTOR"},
+    {"THE LIGHTS DROVE IT BACK!", "\x08""LAS LUCES LO HICIERON RETROCEDER!"},
+    {"THE JAMBOREE PIZZA PARLOR", "LA PIZZER\x04""A JAMBOREE"},
+    {"THE STARS' DRESSING ROOMS", "LOS CAMERINOS DE LAS ESTRELLAS"},
+    {"FIND YOUR FIRST FILM REEL", "ENCUENTRA TU PRIMER ROLLO"},
+    {"THERE GOES THE HARD HAT!", "\x08""ADI\x05""S AL CASCO!"},
+    {"DOWN TO YOUR UNDERSHIRT!", "\x08""TE QUEDASTE EN CAMISETA!"},
+    {"THE STAR'S DRESSING ROOM", "EL CAMERINO DE LA ESTRELLA"},
+    {"PRESS [X] AGAIN TO ERASE", "PULSA [X] OTRA VEZ PARA BORRAR"},
+    {"THE FAIREST OF THEM ALL", "LA M\x02""S BELLA DE TODAS"},
+    {"STARRING THE NIGHT CREW", "PROTAGONIZADA POR EL TURNO DE NOCHE"},
+    {"UNCLE INKY TAKES A BOW!", "\x08""EL T\x04""O INKY HACE UNA REVERENCIA!"},
+    {"ELECTRICIAN OF THE YEAR", "ELECTRICISTA DEL A\x01""O"},
+    {"THE LOST CARTOON VAULT", "LA B\x05""VEDA DE CARICATURAS PERDIDAS"},
+    {"GUST OF WIND! HOLD ON!", "\x08""R\x02""FAGA DE VIENTO! \x08""AG\x02""RRATE!"},
+    {"HE'S SPELLING TROUBLE!", "\x08""EST\x02"" DELETREANDO PROBLEMAS!"},
+    {"BREAKER ON: +40% POWER", "INTERRUPTOR: +40% DE ENERG\x04""A"},
+    {"HOLD [OK] FAST FORWARD", "MANT\x03""N [OK] ADELANTAR"},
+    {"FIND ALL 24 FILM REELS", "ENCUENTRA LOS 24 ROLLOS"},
+    {"WHERE THE INK IS MADE", "DONDE SE HACE LA TINTA"},
+    {"HE WANTS IT ALL BACK!", "\x08""LO QUIERE TODO DE VUELTA!"},
+    {"THE SPLICER GETS CUT!", "\x08""A LA EDITORA LA CORTARON!"},
+    {"P2: PRESS [+] TO JOIN", "J2: PULSA [+] PARA ENTRAR"},
+    {"RESTART THE BOSS RUSH", "REINICIAR EL DESFILE DE JEFES"},
+    {"HIDE IN A PROP CLOSET", "ESC\x05""NDETE EN UN ARMARIO"},
+    {"DOWN TO YOUR BOXERS!", "\x08""TE QUEDASTE EN CALZONES!"},
+    {"IT'S COMING... HIDE!", "YA VIENE... \x08""ESC\x05""NDETE!"},
+    {"THE MARQUEE  (TITLE)", "LA MARQUESINA  (T\x04""TULO)"},
+    {"SEVEN YEARS BAD LUCK", "SIETE A\x01""OS DE MALA SUERTE"},
+    {"THAT'S THE REAL ONE!", "\x08""ESA ES LA VERDADERA!"},
+    {"BIG CHEESE IS TOAST!", "\x08""EL GRAN QUESO EST\x02"" FRITO!"},
+    {"THE FINAL CURTAIN...", "EL TEL\x05""N FINAL..."},
+    {"THE WHOLE COLLECTION", "LA COLECCI\x05""N COMPLETA"},
+    {"FINISH THE BOSS RUSH", "TERMINA EL DESFILE DE JEFES"},
+    {"AND TONIGHT'S SHOWS", "Y LAS FUNCIONES DE ESTA NOCHE"},
+    {"CHASE LIGHTS! JUMP!", "\x08""LUCES! \x08""SALTA!"},
+    {"CLAIM TICKET: VOID!", "\x08""BOLETO ANULADO!"},
+    {"PLAYER 2 CLOCKS IN!", "\x08""ENTRA EL JUGADOR 2!"},
+    {"TRY THIS SHOW AGAIN", "REINTENTAR ESTA FUNCI\x05""N"},
+    {"BOSS RUSH COMPLETE!", "\x08""DESFILE DE JEFES COMPLETADO!"},
+    {"THE SHOW MUST GO ON", "LA FUNCI\x05""N DEBE CONTINUAR"},
+    {"FIRST NIGHT JITTERS", "NERVIOS DE ESTRENO"},
+    {"SEE THE TRUE ENDING", "VE EL FINAL VERDADERO"},
+    {"EYES ON THE CAMERAS", "OJOS EN LAS C\x02""MARAS"},
+    {"DRESSED FOR SUCCESS", "VESTIDO PARA TRIUNFAR"},
+    {"CAM 4: HIT LIGHTS!", "C\x02""M 4: \x08""LUCES!"},
+    {"SHE'S CRACKING UP!", "\x08""SE EST\x02"" AGRIETANDO!"},
+    {"COVERALLS BACK ON!", "\x08""OTRA VEZ CON OVEROL!"},
+    {"PRESS [+] TO START", "PULSA [+] PARA EMPEZAR"},
+    {"CHOOSE A SAVE SLOT", "ELIGE UNA RANURA"},
+    {"QUIT THE BOSS RUSH", "SALIR DEL DESFILE DE JEFES"},
+    {"A JUMPS / B SHOOTS", "A SALTA / B DISPARA"},
+    {"B JUMPS / A SHOOTS", "B SALTA / A DISPARA"},
+    {"THE SPLICING TABLE", "LA MESA DE EDICI\x05""N"},
+    {"FIND 12 FILM REELS", "ENCUENTRA 12 ROLLOS"},
+    {"SHE'S UNSPOOLING!", "\x08""SE EST\x02"" DESENROLLANDO!"},
+    {"IT'S OVERHEATING!", "\x08""SE EST\x02"" SOBRECALENTANDO!"},
+    {"HE'S OVERLOADING!", "\x08""SE EST\x02"" SOBRECARGANDO!"},
+    {"STOP THE PRESSES!", "\x08""PAREN LAS PRENSAS!"},
+    {"OVERALLS BACK ON!", "\x08""OTRA VEZ CON PETO!"},
+    {"PRESS [+] TO PLAY", "PULSA [+] PARA JUGAR"},
+    {"RESTART THIS SHOW", "REINICIAR ESTA FUNCI\x05""N"},
+    {"THE CURTAIN FALLS", "CAE EL TEL\x05""N"},
+    {"WEAR A NEW OUTFIT", "PONTE UN TRAJE NUEVO"},
+    {"FILM REEL FOUND!", "\x08""ROLLO ENCONTRADO!"},
+    {"THE SHOW IS OVER", "SE ACAB\x05"" LA FUNCI\x05""N"},
+    {"FILM REELS FOUND", "ROLLOS ENCONTRADOS"},
+    {"STAGEHAND BADGES", "INSIGNIAS DE TRAMOYA"},
+    {"PLUNGER LAUNCHER", "LANZADESTAPADORES"},
+    {"PROJECTION BOOTH", "CABINA DE PROYECCI\x05""N"},
+    {"STAR OF THE SHOW", "ESTRELLA DEL SHOW"},
+    {"STANDING OVATION", "OVACI\x05""N DE PIE"},
+    {"FLIP 25 BREAKERS", "SUBE 25 INTERRUPTORES"},
+    {"MIND THE GLASS!", "\x08""CUIDADO CON EL VIDRIO!"},
+    {"WATCH THE INTRO", "VER LA INTRODUCCI\x05""N"},
+    {"ERASE SAVE DATA", "BORRAR DATOS"},
+    {"SECURITY OFFICE", "OFICINA DE SEGURIDAD"},
+    {"MIDNIGHT (HARD)", "MEDIANOCHE (DIF\x04""CIL)"},
+    {"UP AT A BREAKER", "ARRIBA EN UN INTERRUPTOR"},
+    {"HALL OF MIRRORS", "SALA DE ESPEJOS"},
+    {"ROOFTOP MARQUEE", "MARQUESINA EN LA AZOTEA"},
+    {"FINDERS KEEPERS", "EL QUE LO ENCUENTRA SE LO QUEDA"},
+    {"THE GRAND STAGE", "EL GRAN ESCENARIO"},
+    {"ENCORE! ENCORE!", "\x08""OTRA! \x08""OTRA!"},
+    {"THAT'S A WRAP!", "\x08""CORTE Y QUEDA!"},
+    {"START THE SHOW", "EMPEZAR LA FUNCI\x05""N"},
+    {"NEW BEST RANK!", "\x08""NUEVO MEJOR RANGO!"},
+    {"SECURITY CO-OP", "COOP DE SEGURIDAD"},
+    {"CO-OP OPERATOR", "OPERADOR COOP"},
+    {"MATINEE (EASY)", "MATIN\x03""E (F\x02""CIL)"},
+    {"UP AT A CLOSET", "ARRIBA EN UN ARMARIO"},
+    {"D-PAD OR STICK", "CRUCETA O PALANCA"},
+    {"THE FINAL SHOW", "LA \x06""LTIMA FUNCI\x05""N"},
+    {"BARNYARD SHORT", "CORTO DE GRANJA"},
+    {"BOILER FURNACE", "HORNO"},
+    {"THE PRESS ROOM", "LA SALA DE PRENSAS"},
+    {"THE CLAIM DESK", "EL MOSTRADOR DE RECLAMOS"},
+    {"LIGHTNING RODS", "PARARRAYOS"},
+    {"EARN AN S RANK", "CONSIGUE UN RANGO S"},
+    {"HE'S STEAMED!", "\x08""EST\x02"" QUE ECHA HUMO!"},
+    {"AN EMPTY SEAT", "UN ASIENTO VAC\x04""O"},
+    {"QUIT TO TITLE", "SALIR AL T\x04""TULO"},
+    {"SHOW CLEARED!", "\x08""FUNCI\x05""N SUPERADA!"},
+    {"SOUND EFFECTS", "EFECTOS DE SONIDO"},
+    {"WELDING TORCH", "SOPLETE"},
+    {"GOLDEN TICKET", "BOLETO DORADO"},
+    {"SILVER SCREEN", "PANTALLA DE PLATA"},
+    {"OPENING NIGHT", "NOCHE DE ESTRENO"},
+    {"CARTOON REELS", "ROLLOS DE CARICATURA"},
+    {"THE INK WORKS", "LA F\x02""BRICA DE TINTA"},
+    {"THE BIG PRESS", "LA GRAN PRENSA"},
+    {"THE COLLECTOR", "EL COLECCIONISTA"},
+    {"THE HEADLINER", "EL ESTELAR"},
+    {"PIZZA COUNTER", "MOSTRADOR"},
+    {"DELIVERY DOCK", "AND\x03""N DE REPARTO"},
+    {"THE RAT'S DEN", "LA GUARIDA DE LA RATA"},
+    {"LOST PROPERTY", "COSAS PERDIDAS"},
+    {"DOLL HOSPITAL", "HOSPITAL DE MU\x01""ECAS"},
+    {"THE NEON SIGN", "EL LETRERO DE NE\x05""N"},
+    {"BURNING LOBBY", "VEST\x04""BULO EN LLAMAS"},
+    {"ORCHESTRA PIT", "FOSO DE ORQUESTA"},
+    {"HALFWAY THERE", "A MEDIO CAMINO"},
+    {"THE FINAL BOW", "LA \x06""LTIMA REVERENCIA"},
+    {"TRUE BELIEVER", "CREYENTE DE VERDAD"},
+    {"HARD HAT HERO", "H\x03""ROE DEL CASCO"},
+    {"HIDE AND SEEK", "LAS ESCONDIDAS"},
+    {"IN THIS SHOW", "EN ESTA FUNCI\x05""N"},
+    {"MUSIC VOLUME", "VOLUMEN DE M\x06""SICA"},
+    {"SCREEN SHAKE", "TEMBLOR DE PANTALLA"},
+    {"BADGE EARNED", "INSIGNIA GANADA"},
+    {"FAST FORWARD", "ADELANTAR"},
+    {"INTERMISSION", "INTERMEDIO"},
+    {"RIVET SPREAD", "REMACHES"},
+    {"LOST & FOUND", "OBJETOS PERDIDOS"},
+    {"INKY UNBOUND", "INKY DESATADO"},
+    {"CUTTING ROOM", "SALA DE EDICI\x05""N"},
+    {"LUGGAGE HALL", "SALA DE EQUIPAJE"},
+    {"WATER TOWERS", "TANQUES DE AGUA"},
+    {"THE FLY LOFT", "EL TELAR"},
+    {"CURTAIN CALL", "SALUDO FINAL"},
+    {"QUICK CHANGE", "CAMBIO R\x02""PIDO"},
+    {"MIDNIGHT RUN", "CARRERA DE MEDIANOCHE"},
+    {"BUDDY SYSTEM", "TRABAJO EN EQUIPO"},
+    {"NEW RECORD!", "\x08""NUEVO R\x03""CORD!"},
+    {"TRUE ENDING", "FINAL VERDADERO"},
+    {"NOW SHOWING", "EN CARTELERA"},
+    {"NOW PLAYING", "SONANDO"},
+    {"SHOW SELECT", "ELEGIR FUNCI\x05""N"},
+    {"FIEND ALERT", "ALERTA DE DEMONIO"},
+    {"SLOT ERASED", "RANURA BORRADA"},
+    {"PROGRAMMING", "PROGRAMACI\x05""N"},
+    {"NIGHT SHIFT", "TURNO DE NOCHE"},
+    {"INK STAINED", "MANCHADO DE TINTA"},
+    {"PIZZA PARTY", "FIESTA DE PIZZA"},
+    {"THE SPLICER", "LA EDITORA"},
+    {"BOILER ROOM", "SALA DE CALDERAS"},
+    {"DINING HALL", "COMEDOR"},
+    {"SPOOK SHORT", "CORTO DE SUSTOS"},
+    {"LOADING BAY", "ZONA DE CARGA"},
+    {"PRESS FLOOR", "PISO DE PRENSAS"},
+    {"FIRE ESCAPE", "ESCALERA DE INCENDIOS"},
+    {"THE ROOFTOP", "LA AZOTEA"},
+    {"THE MARQUEE", "LA MARQUESINA"},
+    {"THE BALCONY", "EL BALC\x05""N"},
+    {"BEAT SHOW 1", "TERMINA LA FUNCI\x05""N 1"},
+    {"BEAT SHOW 4", "TERMINA LA FUNCI\x05""N 4"},
+    {"BEAT SHOW 8", "TERMINA LA FUNCI\x05""N 8"},
+    {"UNTOUCHABLE", "INTOCABLE"},
+    {"FULL GEAR!", "\x08""EQUIPO COMPLETO!"},
+    {"SAVE SLOTS", "RANURAS"},
+    {"FILM REELS", "ROLLOS"},
+    {"SHIFT OVER", "FIN DEL TURNO"},
+    {"PLAY STYLE", "MODO DE JUEGO"},
+    {"DIFFICULTY", "DIFICULTAD"},
+    {"BEST SCORE", "MEJOR PUNTAJE"},
+    {"OR", "O"},
+    {"SOMETHING'S MISSING BACKSTAGE", "FALTA ALGO TRAS BAMBALINAS"},
+    {"SOME OF THE GAME'S FILES COULDN'T BE FOUND.", "NO SE ENCONTRARON ALGUNOS ARCHIVOS DEL JUEGO."},
+    {"PLEASE REINSTALL MIDNIGHT MATINEE FROM THE .WUHB FILE.", "VUELVE A INSTALAR MIDNIGHT MATINEE DESDE EL ARCHIVO .WUHB."},
+    {"TO QUIT", "PARA SALIR"},
+    {"CONTROLLER DISCONNECTED", "CONTROL DESCONECTADO"},
+    {"A CONTROLLER LOST ITS CONNECTION.", "UN CONTROL PERDI\x05"" LA CONEXI\x05""N."},
+    {"CHECK ITS BATTERY OR RECONNECT IT. THE SHOW WILL WAIT.", "REVISA LA BATER\x04""A O VUELVE A CONECTARLO. LA FUNCI\x05""N ESPERAR\x02""."},
+    {"PRESS ANY BUTTON TO CONTINUE", "PULSA CUALQUIER BOT\x05""N PARA CONTINUAR"},
+    {"LOADING...", "CARGANDO..."},
+    {"UNDERSHIRT", "CAMISETA"},
+    {"UNCLE INKY", "T\x04""O INKY"},
+    {"BIG CHEESE", "GRAN QUESO"},
+    {"AUDITORIUM", "AUDITORIO"},
+    {"MAIN STAGE", "ESCENARIO PRINCIPAL"},
+    {"PARTY ROOM", "SAL\x05""N DE FIESTAS"},
+    {"TITLE CARD", "TARJETA DE T\x04""TULO"},
+    {"FILM VAULT", "B\x05""VEDA DE PEL\x04""CULAS"},
+    {"PIPE WORKS", "TUBER\x04""AS"},
+    {"COAT CHECK", "GUARDARROPA"},
+    {"STAGE DOOR", "PUERTA DE ARTISTAS"},
+    {"MAKEUP ROW", "FILA DE MAQUILLAJE"},
+    {"THE VANITY", "EL TOCADOR"},
+    {"INK RAIN!", "\x08""LLUVIA DE TINTA!"},
+    {"BOSS RUSH", "DESFILE DE JEFES"},
+    {"SAVE SLOT", "RANURA"},
+    {"FILM REEL", "ROLLO"},
+    {"LIGHTS ON", "LUZ"},
+    {"SWAP GUNS", "CAMBIAR ARMA"},
+    {"BEST RANK", "MEJOR RANGO"},
+    {"BEST TIME", "MEJOR TIEMPO"},
+    {"CONTINUE:", "CONTINUAR:"},
+    {"(WEARING)", "(PUESTO)"},
+    {"A GAME BY", "UN JUEGO DE"},
+    {"KNOCKOUTS", "CA\x04""DAS"},
+    {"FULL GEAR", "EQUIPO COMPLETO"},
+    {"COVERALLS", "OVEROL"},
+    {"BACKSTAGE", "TRAS BAMBALINAS"},
+    {"TOY CHEST", "BA\x06""L DE JUGUETES"},
+    {"REEL FIND", "PRIMER HALLAZGO"},
+    {"FILM BUFF", "CIN\x03""FILO"},
+    {"RUSH HOUR", "HORA PICO"},
+    {"NO POWER", "SIN LUZ"},
+    {"LANGUAGE", "IDIOMA"},
+    {"BIG JUMP", "SALTO ALTO"},
+    {"OR STICK", "O PALANCA"},
+    {"CLEARED!", "\x08""SUPERADA!"},
+    {"(LOCKED)", "(BLOQUEADO)"},
+    {"2ND SHOW", "2A FUNCI\x05""N"},
+    {"NEW GAME", "NUEVA PARTIDA"},
+    {"WARDROBE", "VESTUARIO"},
+    {"TO START", "PARA EMPEZAR"},
+    {"OVERALLS", "PETO"},
+    {"NAIL GUN", "CLAVADORA"},
+    {"INK VATS", "TINAS DE TINTA"},
+    {"ENGLISH", "ENGLISH"},
+    {"ESPANOL", "ESPA\x01""OL"},
+    {"RUNNER:", "CORREDOR:"},
+    {"CLEARED", "SUPERADA"},
+    {"CREDITS", "CR\x03""DITOS"},
+    {"OPTIONS", "OPCIONES"},
+    {"GALLERY", "GALER\x04""A"},
+    {"JUKEBOX", "ROCOLA"},
+    {"BUTTONS", "BOTONES"},
+    {"TO JOIN", "PARA ENTRAR"},
+    {"CLASSIC", "CL\x02""SICO"},
+    {"KITCHEN", "COCINA"},
+    {"ENGINE", "MOTOR"},
+    {"EXTRAS", "EXTRAS"},
+    {"RUMBLE", "VIBRACI\x05""N"},
+    {"RESUME", "CONTINUAR"},
+    {"SELECT", "ACEPTAR"},
+    {"CHOOSE", "ELEGIR"},
+    {"CHANGE", "CAMBIAR"},
+    {"BROWSE", "VER"},
+    {"LOCKED", "BLOQUEADO"},
+    {"BUTTON", "BOT\x05""N"},
+    {"NORMAL", "NORMAL"},
+    {"BOXERS", "CALZONES"},
+    {"ENCORE", "OTRA VEZ"},
+    {"BEST!", "\x08""MEJOR!"},
+    {"NEXT:", "SIGUE:"},
+    {"DOWN!", "\x08""DERROTADO!"},
+    {"ERASE", "BORRAR"},
+    {"PAUSE", "PAUSA"},
+    {"SCORE", "PUNTOS"},
+    {"POWER", "ENERG\x04""A"},
+    {"SHOOT", "DISPARAR"},
+    {"PRESS", "PULSA"},
+    {"REELS", "ROLLOS"},
+    {"TOOLS", "\x06""TILES"},
+    {"PROPS", "UTILER\x04""A"},
+    {"LOBBY", "VEST\x04""BULO"},
+    {"VIEW", "VER"},
+    {"WEAR", "PONER"},
+    {"OPEN", "ABRIR"},
+    {"BACK", "ATR\x02""S"},
+    {"PLAY", "JUGAR"},
+    {"NEXT", "SIGUE"},
+    {"SKIP", "SALTAR"},
+    {"RANK", "RANGO"},
+    {"TIME", "TIEMPO"},
+    {"MOVE", "MOVER"},
+    {"JUMP", "SALTAR"},
+    {"HOLD", "MANT\x03""N"},
+    {"HIDE", "ESCONDERSE"},
+    {"SOLO", "SOLO"},
+    {"BOSS", "JEFE"},
+    {"SLOT", "RANURA"},
+    {"SHOW", "FUNCI\x05""N"},
+    {"DEMO", "DEMO"},
+    {"GEAR", "EQUIPO"},
+    {"AIM", "APUNTAR"},
+    {"OFF", "NO"},
+    {"ON", "S\x04"""},
+    {"OF", "DE"},
+};
+#define NTR (int)(sizeof TR_TAB / sizeof *TR_TAB)
+static int is_word(char c) { return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '\''; }
+static const char *TR(const char *s) {
+    if (!save.language || !s || !*s) return s;
+    static struct { unsigned h; char in[192]; char out[288]; } cache[160];
+    unsigned h = 2166136261u; for (const char *p = s; *p; p++) h = (h ^ (unsigned char)*p) * 16777619u;
+    int slot = (int)(h % 160);
+    if (cache[slot].h == h && !strcmp(cache[slot].in, s)) return cache[slot].out;
+    if (strlen(s) >= sizeof cache[0].in) return s;
+    char out[288]; int n = 0; const char *p = s;
+    while (*p && n < (int)sizeof out - 1) {
+        int matched = 0;
+        if (p == s || !is_word(p[-1]) || !is_word(*p)) {
+            for (int i = 0; i < NTR; i++) { const char *e = TR_TAB[i][0]; size_t L = strlen(e);
+                if (e[0] != *p || strncmp(p, e, L)) continue;
+                if (is_word(e[L - 1]) && is_word(p[L])) continue;   /* "SHOW" must not eat the start of "SHOWS" */
+                for (const char *t = TR_TAB[i][1]; *t && n < (int)sizeof out - 1; t++) out[n++] = *t;
+                p += L; matched = 1; break; }
+        }
+        if (!matched) out[n++] = *p++;
+    }
+    out[n] = 0;
+    cache[slot].h = h; snprintf(cache[slot].in, sizeof cache[slot].in, "%s", s); snprintf(cache[slot].out, sizeof cache[slot].out, "%s", out);
+    return cache[slot].out;
+}
+/* every piece of text on its way to a screen goes through TR() (a no-op in English) */
+#define draw_text_col(f, s, x, y, sc, c, r, g, b, a) (draw_text_col)(f, TR(s), x, y, sc, c, r, g, b, a)
+#define text_width(f, s, sc) (text_width)(f, TR(s), sc)
+static float fit(Font *f, const char *s, float scale, float maxw) { float w = text_width(f, s, scale); return w > maxw && w > 0 ? scale * maxw / w : scale; }
+
 /* ------------------------------------------------------------ assets */
 #define HERO_FRAMES 8
 #define BG7_K 1.12f   /* painted floor height of the new show backgrounds */
@@ -92,6 +497,11 @@ static void show_cleared(void);
 static Tex posters[8];
 static const Uint8 OUTFIT_RGB[5][3] = {{255, 255, 255}, {150, 172, 255}, {128, 116, 140}, {255, 214, 120}, {206, 214, 232}};
 static int over_sel, pause_sel, con_now[MAX_PADS], opt_back, credits_then;
+static void award(int b);
+static void step_badges(unsigned anyp);
+static void draw_badges(void);
+static void draw_toast(void);
+static int show_hit, boss_hit;   /* got hurt during this show / this boss fight (badges) */
 static void build_tracks(void);
 static void start_intro(int then);
 static void queue_show(int level, int keep);
@@ -218,29 +628,67 @@ static int local_type(int x0, int x1, int flyer) {
     return best;
 }
 static int pit_safe(void) { return level_no != L_ENCORE; }   /* the Encore's flooded pit rules: no new pits there */
+/* the stepping-stone material each show is built from (the ledge that holds the reel is always solid) */
+static void conveyor(int x0, int x1, int y, char dir);
+static void filmplat(int x0, int x1, int y);
+static void blocks(int x0, int x1, int y);
+static void neon(int x0, int x1, int y);
+static void oven(int x0, int y);
+static void saw(int tx, int ty);
+static void crusher(int tx);
+static void vent(int tx);
+static void mousetrap(int tx);
+static void mirror(int tx, int y0, int y1);
+static void reflection(int tx, int line_tx);
+static void rod(int tx, int y);
+static void step_mat(int x0, int x1, int y) {
+    switch (level_no) {
+    case L_PIZZA: conveyor(x0, x1, y, '>'); break;
+    case L_REELS: case L_ENCORE: filmplat(x0, x1, y); break;
+    case L_LOST: blocks(x0, x1, y); break;
+    case L_ROOF: neon(x0, x1, y); break;
+    default: plat(x0, x1, y);
+    }
+}
+/* each show's own trouble, placed past the reel so the route to it stays fair */
+static void stretch_hazard(int k, int g) {
+    int x = g + 20 + k % 2;
+    switch (level_no) {
+    case L_LOBBY: if (k == 0) { closet(x); } else if (k == 1) drip(g + 17); else closet(x + 1); break;
+    case L_PIZZA: oven(x, 11); break;
+    case L_REELS: saw(x, k == 1 ? 9 : 12); break;
+    case L_INK: if (k == 1) vent(x); else crusher(x); break;
+    case L_LOST: mousetrap(x); break;
+    case L_MIRROR: if (k == 1) reflection(x + 2, x); else mirror(x, 10, 12); break;
+    case L_ROOF: rod(x, 12); break;
+    case L_ENCORE: if (k == 2) vent(x); else crusher(x); break;
+    }
+}
 static void build_stretch(int k, int g, int zx0, int zx1) {
     int walker = local_type(zx0, zx1, 0), flyer = local_type(zx0, zx1, 1);
     if (walker < 0) walker = E_USHER;
     if (k == 0) {   /* THE CLIMB: hop a gap, then up two ledges to the reel (a crate sits in the way) */
         if (pit_safe()) pit(g + 3, g + 5);
         spawn(walker, g + 8, 13);
-        plat(g + 10, g + 13, 10); plat(g + 15, g + 19, 7);
+        step_mat(g + 10, g + 13, 10); plat(g + 15, g + 19, 7);
         spawn(E_CRATE, g + 16, 7);
         reel_spot[k] = (ReelSpot){1, (g + 18) * TILE + 24, 7 * TILE - 44};
-        if (flyer >= 0) spawn(flyer, g + 21, 7); else spawn(walker, g + 21, 13);
+        if (level_no == L_LOBBY) { int n0 = nen; spawn(E_DOG, g + 17, 7); if (nen > n0) { en[nen - 1].plat0 = (g + 15) * TILE + 30; en[nen - 1].plat1 = (g + 20) * TILE - 30; } }
+        else if (flyer >= 0) spawn(flyer, g + 21, 7); else spawn(walker, g + 22, 13);
     } else if (k == 1) {   /* THE CROSSING: stepping stones over a long gap; the reel waits on a high ledge */
         if (pit_safe()) pit(g + 4, g + 12);
-        plat(g + 5, g + 7, 10); plat(g + 9, g + 11, 9); plat(g + 14, g + 16, 6);
+        step_mat(g + 5, g + 7, 10); step_mat(g + 9, g + 11, 9); plat(g + 14, g + 16, 6);
         reel_spot[k] = (ReelSpot){1, (g + 15) * TILE + 24, 6 * TILE - 44};
         if (flyer >= 0) spawn(flyer, g + 10, 5);
-        spawn(walker, g + 19, 13); spawn(walker, g + 22, 13);
+        spawn(walker, g + 19, 13); spawn(walker, g + 23, 13);
     } else {   /* THE TOWER: two steps up to the top of a stack, reel on the roof */
         spawn(walker, g + 3, 13);
         block(g + 6, g + 8, 11, 12); block(g + 11, g + 13, 9, 12);
         reel_spot[k] = (ReelSpot){1, (g + 12) * TILE + 24, 9 * TILE - 44};
-        plat(g + 16, g + 19, 10); spawn(E_HATCRATE, g + 18, 10);
-        if (flyer >= 0) spawn(flyer, g + 21, 6); else spawn(walker, g + 21, 13);
+        step_mat(g + 16, g + 19, 10); spawn(E_HATCRATE, g + 18, 10);
+        if (flyer >= 0) spawn(flyer, g + 22, 6); else spawn(walker, g + 23, 13);
     }
+    stretch_hazard(k, g);
 }
 static void build_level(void) {
     ZONE_NAME = LEVELS[level_no].zone;
@@ -586,7 +1034,7 @@ static char msg[64];
 static int p1_char = -1;   /* runner picked on the title screen; player 2 gets the other one */
 static const char *CHAR_NAME[NCHARS] = {"JOE", "ROSIE"};
 static int scene, menu_sel = 1, cam_sel = 0, quit_req, frame_no, darkness_on;
-enum { SC_TITLE, SC_PLAY, SC_OVER, SC_CLEAR, SC_END, SC_LOAD, SC_SELECT, SC_OPTIONS, SC_EXTRAS, SC_GALLERY, SC_JUKEBOX, SC_WARDROBE, SC_INTRO, SC_CREDITS, SC_RUSHDONE, SC_LOGO, SC_PRESS, SC_SLOTS };
+enum { SC_TITLE, SC_PLAY, SC_OVER, SC_CLEAR, SC_END, SC_LOAD, SC_SELECT, SC_OPTIONS, SC_EXTRAS, SC_GALLERY, SC_JUKEBOX, SC_WARDROBE, SC_INTRO, SC_CREDITS, SC_RUSHDONE, SC_LOGO, SC_PRESS, SC_SLOTS, SC_BADGES };
 static float scene_t, ping_cool, op_idle;
 static float film_phase(int tx) { return fmodf(scene_t + (tx / 5) * 1.1f, 3.2f); }
 static float negative_t;   /* the Splicer's frame-skip flash */
@@ -726,13 +1174,13 @@ static void hurt_player(Player *p, float from_x) {
     p->gear--; p->inv = 1.6f; shake = 8;
     p->vx = (p->x < from_x ? -1 : 1) * 260; p->vy = -420;
     sfx("hurt"); rumble_pad(p->pad, p->gear <= 0 ? 1.0f : 0.6f, p->gear <= 0 ? 450 : 220);
-    p->hurt_t = 0.45f;
+    p->hurt_t = 0.45f; show_hit = 1; if (boss.active) boss_hit = 1;
     if (p->gear <= 0) { vo(p->chr, "ko"); sfx("dizzy"); } else if (rand() % 2 == 0) vo(p->chr, "hurt");
     if (p->gear == 2) { for (int i = 0; i < 6; i++) part(p->x, p->y - 140, (frand() - 0.5f) * 300, -300 - frand() * 200, 0.9f, 9, 900, 230, 180, 50, 0); message("THERE GOES THE HARD HAT!", 1.4f); }
     if (p->gear == 1) { for (int i = 0; i < 10; i++) part(p->x, p->y - 70, (frand() - 0.5f) * 400, -300 - frand() * 200, 1.0f, 8, 900, 70, 100, 150, 0); message(p->chr == 1 ? "DOWN TO YOUR UNDERSHIRT!" : "DOWN TO YOUR BOXERS!", 1.4f); }
     if (p->gear <= 0) { p->alive = 0; p->dead_t = 0; p->vy = -700; sfx("boom"); ink_burst(p->x, p->y - 60, 20, 300); }
 }
-static void kill_player(Player *p) { if (!p->alive) return; if (god_mode()) { reset_player(p, 0); return; } p->gear = 1; p->inv = 0; p->hidden = 0; hurt_player(p, p->x); }
+static void kill_player(Player *p) { if (!p->alive) return; if (god_mode()) { reset_player(p, 0); return; } show_hit = 1; if (boss.active) boss_hit = 1; p->gear = 1; p->inv = 0; p->hidden = 0; hurt_player(p, p->x); }
 
 /* ------------------------------------------------------------ init */
 static Tex load_or_empty(const char *rel) { Tex t = tex_load(rel); return t; }
@@ -963,12 +1411,13 @@ static void update_player(Player *p, const Input *in) {
         return;
     }
     if ((pr_ & B_UP) && p->onground && map[12][ctx] == 'C') {
-        p->hidden = 1; p->closet_tx = ctx; p->x = ctx * TILE + TILE / 2; p->vx = 0; sfx("closet");
+        p->hidden = 1; p->closet_tx = ctx; p->x = ctx * TILE + TILE / 2; p->vx = 0; sfx("closet"); award(19);
         message("HIDING... (UP TO COME OUT)", 1.2f); return;
     }
     /* flip a breaker */
     if ((pr_ & B_UP) && p->onground) for (int i = 0; i < nbreak; i++) if (!breakers[i].used && abs(breakers[i].tx - ctx) <= 1) {
-        breakers[i].used = 1; power = clampf(power + 40, 0, 100); sfx("power"); vo(p->chr, "lights"); message("BREAKER ON: +40% POWER", 1.6f);
+        breakers[i].used = 1; power = clampf(power + 40, 0, 100); sfx("power");
+        if (!demo_on && save.breakers_flipped < 255) { save.breakers_flipped++; if (save.breakers_flipped >= 25) award(12); } vo(p->chr, "lights"); message("BREAKER ON: +40% POWER", 1.6f);
         spark_burst(breakers[i].tx * TILE + 24, 11 * TILE + 20, 20, 255, 230, 120);
     }
 
@@ -1673,6 +2122,7 @@ static void update_fiend(void) {
 /* ------------------------------------------------------------ boss: Uncle Inky */
 enum { BS_INTRO, BS_IDLE, BS_SLAM_AIM, BS_SLAM_HIT, BS_NOTES, BS_SWEEP_WARN, BS_SWEEP, BS_TICKETS, BS_DEAD, BS_WARP };
 static void boss_start(void) {
+    boss_hit = 0;
     sfx("boss_sting");
     boss.active = 1; boss.state = BS_INTRO; boss.timer = 2.6f; boss.maxhp = boss.hp = LEVELS[level_no].boss_hp; boss.face = -1;
     if (loop_no) boss.maxhp = boss.hp = boss.hp * 13 / 10;   /* second run: tougher bosses */
@@ -2927,7 +3377,7 @@ static void draw_tiles(float ox, float oy) {
             Uint8 br = (Uint8)(150 + (tx * 37) % 100), bg_ = (Uint8)(60 + (tx * 53) % 140), bb = (Uint8)(50 + (tx * 71) % 120);
             fill_rect((int)(x + wob), (int)y, TILE, TILE - 4, 30, 20, 14, 255); fill_rect((int)(x + wob) + 3, (int)y + 3, TILE - 6, TILE - 10, br, bg_, bb, 255);
             fill_rect((int)(x + wob) + 9, (int)y + 9, TILE - 18, TILE - 22, (Uint8)(br * 0.8f), (Uint8)(bg_ * 0.8f), (Uint8)(bb * 0.8f), 255);
-            draw_text_col(&A.small, (const char[]){(char)('A' + (tx * 7 + ty) % 26), 0}, x + wob + 24, y + 10, 0.5f, 1, 250, 240, 210, 255);
+            { char letter[2] = {(char)('A' + (tx * 7 + ty) % 26), 0}; draw_text_col(&A.small, letter, x + wob + 24, y + 10, 0.5f, 1, 250, 240, 210, 255); }
         } else if (c == 'u') {   /* a crumbled block, stacking itself back up */
             if (regrow_t[ty][tx] < 0.8f && (frame_no / 3) % 2) fill_rect((int)x + 3, (int)y + 3, TILE - 6, TILE - 10, 220, 200, 160, 70);
         } else if (c == 'M') {   /* giant mousetrap */
@@ -3564,7 +4014,29 @@ static void game_draw_inner(void) {
     if (scene == SC_OPTIONS) { draw_options(); draw_post(); }
 }
 
-void game_step(const Input pads[MAX_PADS], const int connected[MAX_PADS]) { game_step_inner(pads, connected); iris_track(); }
+/* ---- friendly error screens: missing game files, a controller that dropped out */
+static int files_missing = -1, ctrl_lost;
+static float ctrl_lost_t;
+static int check_files(void) { return !A.font.tex.tex || !A.small.tex.tex || !keyart_tex.tex || !A.hero[0][0][0].tex; }
+void game_controller_lost(void) { if (demo_on) return; ctrl_lost = 1; ctrl_lost_t = 0; game_focus_lost(); }
+void game_controller_found(void) { ctrl_lost = 0; }
+static void draw_error_card(const char *title, const char *l1, const char *l2, const char *hint) {
+    fill_rect(0, 0, SCREEN_W, SCREEN_H, 8, 3, 2, 225);
+    fill_rect(SCREEN_W / 2 - 420, 200, 840, 320, 40, 14, 10, 255); fill_rect(SCREEN_W / 2 - 412, 208, 824, 304, 20, 8, 6, 255);
+    fill_rect(SCREEN_W / 2 - 420, 200, 840, 6, 200, 60, 40, 255);
+    if (!A.font.tex.tex) { for (int i = 0; i < 6; i++) fill_rect(SCREEN_W / 2 - 14, 260 + i * 24, 28, 18, 230, 70, 50, 255); fill_rect(SCREEN_W / 2 - 14, 430, 28, 28, 230, 70, 50, 255); return; }
+    draw_text_col(&A.font, title, SCREEN_W / 2, 240, fit(&A.font, title, 0.8f, 780), 1, 255, 120, 90, 255);
+    draw_text_col(&A.small, l1, SCREEN_W / 2, 330, fit(&A.small, l1, 0.55f, 780), 1, 255, 236, 200, 255);
+    draw_text_col(&A.small, l2, SCREEN_W / 2, 372, fit(&A.small, l2, 0.55f, 780), 1, 230, 200, 170, 255);
+    draw_rich(&A.small, hint, SCREEN_W / 2, 450, 0.55f, 1, 220, 200, 170, (Uint8)(170 + 80 * sinf(SDL_GetTicks() / 250.0f)));
+}
+void game_step(const Input pads[MAX_PADS], const int connected[MAX_PADS]) {
+    if (files_missing < 0) { const char *e = getenv("MM_ERR"); if (e && *e == '2') ctrl_lost = 1; files_missing = check_files() || (e && *e == '1'); if (files_missing) printf("Midnight Matinee: game files are missing - reinstall the .wuhb\n"); }
+    unsigned anyp = 0; for (int i = 0; i < MAX_PADS; i++) anyp |= pads[i].pressed;
+    if (files_missing) { if (anyp & B_START) quit_req = 1; return; }
+    if (ctrl_lost) { ctrl_lost_t += DT; if (ctrl_lost_t > 0.4f && anyp) ctrl_lost = 0; return; }
+    game_step_inner(pads, connected); iris_track();
+}
 void game_draw(void) {
     game_draw_inner();
     if (demo_on && (scene == SC_PLAY || scene == SC_LOAD)) {
@@ -3573,6 +4045,9 @@ void game_draw(void) {
         draw_rich(&A.font, "PRESS [+] TO PLAY", SCREEN_W / 2, SCREEN_H - 54, 0.55f, 1, 255, 236, 190, 255);
     }
     draw_iris();
+    draw_toast();
+    if (files_missing > 0) draw_error_card("SOMETHING'S MISSING BACKSTAGE", "SOME OF THE GAME'S FILES COULDN'T BE FOUND.", "PLEASE REINSTALL MIDNIGHT MATINEE FROM THE .WUHB FILE.", "PRESS [+] TO QUIT");
+    else if (ctrl_lost) draw_error_card("CONTROLLER DISCONNECTED", "A CONTROLLER LOST ITS CONNECTION.", "CHECK ITS BATTERY OR RECONNECT IT. THE SHOW WILL WAIT.", "PRESS ANY BUTTON TO CONTINUE");
 }
 
 /* ------------------------------------------------------------ drawing: GamePad security office */
@@ -3815,7 +4290,7 @@ static void finish_load(void) {
         camx = clampf(pl[0].x - SCREEN_W * 0.35f, 0, LW * TILE - SCREEN_W);
     }
     if (demo_on) { cur_check = ncheck > 3 ? 1 + rand() % 2 : 0; reset_player(&pl[0], 0); camx = clampf(pl[0].x - SCREEN_W * 0.35f, 0, LW * TILE - SCREEN_W); }
-    show_time = 0; show_deaths = 0; reels_run = 0; show_score0 = score; ld.pending = 0;
+    show_time = 0; show_deaths = 0; reels_run = 0; show_score0 = score; ld.pending = 0; show_hit = boss_hit = 0;
 }
 static void show_cleared(void) {
     scene = SC_CLEAR; scene_t = 0; music_play("mm_clear", 0); show_newbest = 0;
@@ -3830,6 +4305,17 @@ static void show_cleared(void) {
     if (sc > save.best_score[L]) { save.best_score[L] = sc; show_newbest |= 2; }
     int tt = (int)(show_time * 10); if (!save.best_time[L] || tt < save.best_time[L]) { save.best_time[L] = tt; show_newbest |= 4; }
     save.cleared[loop_no][L] = 1;
+    if (L == 0) award(0);
+    if (L == 3) award(1);
+    if (L == NUM_LEVELS - 1) award(2);
+    if (!show_hit) award(9);
+    if (!boss_hit) award(10);
+    if (show_time < 240) award(11);
+    if (difficulty() == 2) award(13);
+    if (pl[0].active && pl[1].active) award(16);
+    if (mode == 1) award(17);
+    if (show_grade == 4) award(7);
+    { int all = 1; for (int i = 0; i < NUM_LEVELS; i++) if (save.grade[i] < 4) all = 0; if (all) award(8); }
     if (L + 1 < NUM_LEVELS) { if (L + 1 > save.reached[loop_no]) save.reached[loop_no] = (unsigned char)(L + 1); save.cont_level = (unsigned char)(L + 1); save.cont_loop = (unsigned char)loop_no; }
     game_save();
 }
@@ -3924,12 +4410,12 @@ static void step_select(unsigned anyp) {
     }
 }
 static void step_options(unsigned anyp) {
-    int n = opt_back == SC_PLAY ? 6 : 7;   /* no erasing from the pause menu */
+    int n = opt_back == SC_PLAY ? 7 : 8;   /* no erasing from the pause menu */
     if (anyp & B_UP) { opt_sel = (opt_sel + n - 1) % n; sfx("menu"); erase_armed = 0; }
     if (anyp & B_DOWN) { opt_sel = (opt_sel + 1) % n; sfx("menu"); erase_armed = 0; }
     int lr = (anyp & B_LEFT) ? -1 : (anyp & B_RIGHT) ? 1 : 0, ok = (anyp & OK_BITS()) != 0;
-    int row = opt_sel; if (n == 6 && row == 5) row = 6;
-    if (anyp & BACK_BITS()) row = 6, ok = 1, lr = 0;
+    int row = opt_sel < 5 ? opt_sel : opt_sel == 5 ? 7 : (n == 7 ? 8 : opt_sel == 6 ? 5 : 8);   /* 7 = language, 5 = erase, 8 = back */
+    if (anyp & BACK_BITS()) row = 8, ok = 1, lr = 0;
     switch (row) {
     case 0: if (lr) { save.music_vol = (unsigned char)clampf(save.music_vol + lr, 0, 10); audio_set_volume(save.music_vol, save.sfx_vol); } break;
     case 1: if (lr) { save.sfx_vol = (unsigned char)clampf(save.sfx_vol + lr, 0, 10); audio_set_volume(save.music_vol, save.sfx_vol); sfx("coin"); } break;
@@ -3938,12 +4424,13 @@ static void step_options(unsigned anyp) {
     case 4: if (lr || ok) { save.shake ^= 1; sfx("menu"); if (save.shake) shake = 10; } break;
     case 5: if (ok) { if (!erase_armed) { erase_armed = 1; sfx("tick"); }
                       else { save_reset_progress(); game_save(); erase_armed = 0; sfx("boom"); message("SAVE DATA ERASED. A FRESH SHOW AWAITS.", 2.2f); } } break;
-    case 6: if (ok) { game_save(); sfx("menu"); scene = opt_back; scene_t = opt_back == SC_PLAY ? scene_t : 0; } break;
+    case 7: if (lr || ok) { save.language ^= 1; sfx("menu"); } break;
+    case 8: if (ok) { game_save(); sfx("menu"); scene = opt_back; scene_t = opt_back == SC_PLAY ? scene_t : 0; } break;
     }
     if (lr && row < 2) sfx("menu");
 }
 static void step_extras(unsigned anyp) {
-    const int n = 6;
+    const int n = 7;
     if (anyp & B_UP) { extras_sel = (extras_sel + n - 1) % n; sfx("menu"); }
     if (anyp & B_DOWN) { extras_sel = (extras_sel + 1) % n; sfx("menu"); }
     if (anyp & BACK_BITS()) { sfx("menu"); scene = SC_TITLE; scene_t = 0; return; }
@@ -3953,8 +4440,9 @@ static void step_extras(unsigned anyp) {
     case 0: scene = SC_GALLERY; gal_view = 0; break;
     case 1: scene = SC_JUKEBOX; if (!ntracks) build_tracks(); break;
     case 2: scene = SC_WARDROBE; ward_sel = save.outfit; break;
-    case 3: start_intro(0); break;
-    case 4: start_credits(0); break;
+    case 3: scene = SC_BADGES; break;
+    case 4: start_intro(0); break;
+    case 5: start_credits(0); break;
     default: scene = SC_TITLE; break;
     }
     scene_t = 0;
@@ -3988,7 +4476,7 @@ static void step_wardrobe(unsigned anyp) {
     if (anyp & BACK_BITS()) { sfx("menu"); game_save(); scene = SC_EXTRAS; return; }
     if (anyp & OK_BITS()) {
         if (save_total_reels() < OUTFIT[ward_sel].need) { sfx("tick"); message("FIND MORE FILM REELS TO UNLOCK THIS OUTFIT", 1.8f); return; }
-        save.outfit = (unsigned char)ward_sel; sfx("pickup"); game_save();
+        save.outfit = (unsigned char)ward_sel; sfx("pickup"); if (ward_sel) award(18); game_save();
     }
 }
 static const char *INTRO_TEXT[4] = {
@@ -4000,8 +4488,9 @@ static const char *INTRO_TEXT[4] = {
 static void step_intro(unsigned anyp) {
     if (anyp & B_START) { end_intro(); return; }
     float typed = scene_t * 34;   /* characters shown so far */
+    size_t len = strlen(TR(INTRO_TEXT[intro_panel]));
     if (anyp & OK_BITS() & ~B_START) {
-        if (typed < (float)strlen(INTRO_TEXT[intro_panel])) scene_t = strlen(INTRO_TEXT[intro_panel]) / 34.0f + 0.01f;
+        if (typed < (float)len) scene_t = len / 34.0f + 0.01f;
         else { scene_t = INTRO_PANEL_T; }
     }
     if (scene_t >= INTRO_PANEL_T) { if (++intro_panel >= 4) { end_intro(); return; } scene_t = 0; }
@@ -4133,38 +4622,39 @@ static void draw_load_card(void) {
 static void draw_select(void) {
     draw_curtains(1); draw_header("SHOW SELECT");
     for (int s = 0; s < NUM_LEVELS; s++) {
-        float w = 268, h = 151, x = 86 + (s % 4) * (w + 24), y = 150 + (s / 4) * (h + 116);
+        float w = 268, h = 151, x = 86 + (s % 4) * (w + 24), y = 128 + (s / 4) * (h + 104);
         int on = s == sel_show, un = show_unlocked(s);
         fill_rect((int)x - 8, (int)y - 8, (int)w + 16, (int)h + 16, on ? 230 : 70, on ? 180 : 40, on ? 80 : 30, 255);
         if (un && posters[s].tex) draw_tex(&posters[s], x, y, w, h, 0, 255);
         else { fill_rect((int)x, (int)y, (int)w, (int)h, 24, 14, 12, 255); draw_text_col(&A.font, "?", x + w / 2, y + 36, 1.2f, 1, 120, 90, 70, 255); }
         char b[64]; snprintf(b, sizeof b, "%d. %s", s + 1, un ? LEVELS[s].title : "? ? ?");
-        draw_text_col(&A.small, b, x + w / 2, y + h + 12, 0.5f, 1, on ? 255 : 210, on ? 236 : 190, on ? 190 : 160, 255);
+        draw_text_col(&A.small, b, x + w / 2, y + h + 12, fit(&A.small, b, 0.5f, w + 10), 1, on ? 255 : 210, on ? 236 : 190, on ? 190 : 160, 255);
         if (un) { draw_reel_row(x + 34, y + h + 58, save.reels[s], 8);
             if (save.grade[s]) draw_grade(x + w - 24, y + h + 58, save.grade[s], 0.42f, 255);
             if (save.cleared[0][s] || save.cleared[1][s]) draw_text_col(&A.small, "CLEARED", x + w / 2 + 4, y + h + 48, 0.4f, 1, 140, 220, 140, 255); }
     }
     { char b[96], t2[32]; fmt_time(t2, sizeof t2, save.best_time[sel_show]);
       if (show_unlocked(sel_show)) snprintf(b, sizeof b, "BEST SCORE %06d    BEST TIME %s", save.best_score[sel_show], t2); else snprintf(b, sizeof b, "LOCKED");
-      draw_text_col(&A.small, b, SCREEN_W / 2, 612, 0.52f, 1, 240, 210, 170, 255); }
+      draw_text_col(&A.small, b, SCREEN_W / 2, 624, fit(&A.small, b, 0.5f, 1000), 1, 240, 210, 170, 255); }
     draw_hint("[DPAD] CHOOSE   [OK] PLAY   [BACK] BACK"); draw_msg();
 }
 
 static void draw_options(void) {
     if (opt_back == SC_PLAY) fill_rect(0, 0, SCREEN_W, SCREEN_H, 10, 4, 2, 200); else draw_curtains(1);
     draw_header("OPTIONS");
-    char r[7][64];
+    char r[8][64];
     snprintf(r[0], 64, "MUSIC VOLUME   <  %d  >", save.music_vol);
     snprintf(r[1], 64, "SOUND EFFECTS   <  %d  >", save.sfx_vol);
     snprintf(r[2], 64, "RUMBLE   <  %s  >", save.rumble ? "ON" : "OFF");
     snprintf(r[3], 64, "BUTTONS   <  %s  >", save.layout ? "A JUMPS / B SHOOTS" : "B JUMPS / A SHOOTS");
     snprintf(r[4], 64, "SCREEN SHAKE   <  %s  >", save.shake ? "ON" : "OFF");
-    snprintf(r[5], 64, erase_armed ? "PRESS AGAIN TO ERASE EVERYTHING!" : "ERASE SAVE DATA");
-    snprintf(r[6], 64, "BACK");
+    snprintf(r[5], 64, "LANGUAGE   <  %s  >", save.language ? "ESPANOL" : "ENGLISH");
+    snprintf(r[6], 64, erase_armed ? "PRESS AGAIN TO ERASE EVERYTHING!" : "ERASE SAVE DATA");
+    snprintf(r[7], 64, "BACK");
     int n = 0;
-    for (int i = 0; i < 7; i++) { if (opt_back == SC_PLAY && i == 5) continue;
-        int sel = opt_sel == n; menu_row(170 + n * 62, r[i], sel, 0, 0.6f);
-        if (i < 2) { float bx = SCREEN_W / 2 - 150, by = 170 + n * 62 + 44; fill_rect((int)bx, (int)by, 300, 6, 50, 30, 24, 255);
+    for (int i = 0; i < 8; i++) { if (opt_back == SC_PLAY && i == 6) continue;
+        int sel = opt_sel == n; menu_row(150 + n * 56, r[i], sel, 0, 0.56f);
+        if (i < 2) { float bx = SCREEN_W / 2 - 150, by = 150 + n * 56 + 42; fill_rect((int)bx, (int)by, 300, 6, 50, 30, 24, 255);
             fill_rect((int)bx, (int)by, (int)(300 * (i ? save.sfx_vol : save.music_vol) / 10), 6, 255, 200, 90, 255); }
         n++; }
     draw_hint("[DPAD] CHANGE   [BACK] BACK"); draw_msg();
@@ -4185,12 +4675,12 @@ static void draw_pause(void) {
 
 static void draw_extras(void) {
     draw_curtains(1); draw_header("EXTRAS");
-    char b[6][64];
+    char b[7][64]; int nb = 0; for (int i = 0; i < 32; i++) nb += (save.badge[i / 8] >> (i % 8)) & 1;
     snprintf(b[0], 64, "GALLERY"); snprintf(b[1], 64, "JUKEBOX"); snprintf(b[2], 64, "WARDROBE");
-    snprintf(b[3], 64, "WATCH THE INTRO"); snprintf(b[4], 64, "CREDITS"); snprintf(b[5], 64, "BACK");
-    for (int i = 0; i < 6; i++) menu_row(176 + i * 64, b[i], extras_sel == i, 0, 0.62f);
+    snprintf(b[3], 64, "STAGEHAND BADGES  %d / 20", nb); snprintf(b[4], 64, "WATCH THE INTRO"); snprintf(b[5], 64, "CREDITS"); snprintf(b[6], 64, "BACK");
+    for (int i = 0; i < 7; i++) menu_row(150 + i * 58, b[i], extras_sel == i, 0, 0.6f);
     char r[64]; snprintf(r, sizeof r, "FILM REELS FOUND:  %d / 24", save_total_reels());
-    draw_text_col(&A.small, r, SCREEN_W / 2, 586, 0.6f, 1, 255, 210, 140, 255);
+    draw_text_col(&A.small, r, SCREEN_W / 2, 590, 0.6f, 1, 255, 210, 140, 255);
     draw_hint("[OK] OPEN   [BACK] BACK"); draw_msg();
 }
 
@@ -4256,7 +4746,7 @@ static void draw_intro(void) {
     float fade = fminf(fminf(scene_t / 0.6f, (INTRO_PANEL_T - scene_t) / 0.6f), 1);
     fill_rect(0, 0, SCREEN_W, SCREEN_H, 0, 0, 0, (Uint8)(255 * (1 - clampf(fade, 0, 1))));
     fill_rect(0, SCREEN_H - 130, SCREEN_W, 130, 8, 4, 2, 200);
-    const char *s = INTRO_TEXT[intro_panel]; int n = (int)(scene_t * 34); char b[128];
+    const char *s = TR(INTRO_TEXT[intro_panel]); int n = (int)(scene_t * 34); char b[160];
     snprintf(b, sizeof b, "%.*s", n < (int)strlen(s) ? n : (int)strlen(s), s);
     /* wrap into two lines at a space past the middle */
     int len = (int)strlen(b), cut = -1; if (len > 48) for (int i = 44; i < len; i++) if (b[i] == ' ') { cut = i; break; }
@@ -4311,7 +4801,8 @@ static void update_reels(void) {
             if (fabsf(p->x - r->x) < 48 && p->y - 130 < r->y + 24 && p->y > r->y - 30) {
                 r->live = 0; reels_run |= 1 << k; spark_burst(r->x, r->y, 30, 255, 220, 120); ring(r->x, r->y, 90, 255, 220, 140);
                 if (!((save.reels[level_no] >> k) & 1)) {
-                    save.reels[level_no] |= (unsigned char)(1 << k); game_save(); sfx("reel"); vo(p->chr, "reel"); rumble_pad(p->pad, 0.4f, 180);
+                    save.reels[level_no] |= (unsigned char)(1 << k); award(4); if (save_total_reels() >= 12) award(5); if (save_total_reels() >= 24) award(6);
+                    game_save(); sfx("reel"); vo(p->chr, "reel"); rumble_pad(p->pad, 0.4f, 180);
                     char b[64]; snprintf(b, sizeof b, "FILM REEL FOUND!  %d / 3 IN THIS SHOW", popcount3(save.reels[level_no])); message(b, 2.2f);
                 } else { sfx("coin"); message("YOU ALREADY HAVE THIS REEL", 1.2f); }
                 break;
@@ -4330,8 +4821,8 @@ static void draw_tutorial_signs(float ox, float oy) {
         float x = sx(sg[i].tx * TILE + 24) + ox, y = FLOOR_Y + oy; if (x < -120 || x > SCREEN_W + 120) continue;
         fill_rect((int)x - 5, (int)y - 150, 10, 150, 70, 44, 26, 255);
         fill_rect((int)x - 68, (int)y - 222, 136, 74, 50, 30, 18, 255); fill_rect((int)x - 63, (int)y - 217, 126, 64, 128, 86, 48, 255);
-        draw_text_col(&A.small, sg[i].a, x, y - 211, 0.42f, 1, 255, 236, 190, 255);
-        draw_rich(&A.small, sg[i].b, x, y - 185, 0.36f, 1, 40, 20, 10, 255);
+        draw_text_col(&A.small, sg[i].a, x, y - 211, fit(&A.small, sg[i].a, 0.42f, 118), 1, 255, 236, 190, 255);
+        { float sc = 0.36f, w = rich_width(&A.small, sg[i].b, sc); if (w > 120) sc *= 120 / w; draw_rich(&A.small, sg[i].b, x, y - 185, sc, 1, 40, 20, 10, 255); }
     }
 }
 
@@ -4342,6 +4833,7 @@ static int step_front(const Input pads[MAX_PADS], unsigned anyp, unsigned anyh) 
     case SC_LOGO: if (scene_t > 3.3f || (scene_t > 0.5f && anyp)) to_press(); return 1;
     case SC_PRESS: if (anyp & (OK_BITS() | B_START)) { sfx("confirm"); open_slots(); } else if (scene_t > 25) start_demo(); return 1;
     case SC_SLOTS: step_slots(anyp); return 1;
+    case SC_BADGES: step_badges(anyp); return 1;
     case SC_TITLE: step_title(anyp); return 1;
     case SC_SELECT: step_select(anyp); return 1;
     case SC_OPTIONS: step_options(anyp); return 1;
@@ -4366,7 +4858,7 @@ static int step_front(const Input pads[MAX_PADS], unsigned anyp, unsigned anyh) 
     case SC_END:
         if (scene_t > 6.0f && (anyp & OK_BITS())) {
             if (!loop_no) { save.seen_ending = 1; save.cont_level = 0; save.cont_loop = 1; game_save(); start_credits(1); }
-            else { save.true_ending = 1; save.cont_level = 0; save.cont_loop = 0; game_save(); start_credits(2); }
+            else { save.true_ending = 1; save.cont_level = 0; save.cont_loop = 0; award(3); game_save(); start_credits(2); }
         }
         return 1;
     case SC_OVER:
@@ -4385,7 +4877,7 @@ static int step_front(const Input pads[MAX_PADS], unsigned anyp, unsigned anyh) 
         if (scene_t > after_len() + 2.0f && (anyp & OK_BITS())) {
             if (rush_on) {
                 if (level_no + 1 < NUM_LEVELS) queue_show(level_no + 1, 1);
-                else { int tt = (int)(rush_time * 10); rush_new = !save.rush_best || tt < save.rush_best; if (rush_new) save.rush_best = tt; game_save();
+                else { int tt = (int)(rush_time * 10); rush_new = !save.rush_best || tt < save.rush_best; if (rush_new) save.rush_best = tt; award(14); if (rush_time < 480) award(15); game_save();
                        scene = SC_RUSHDONE; scene_t = 0; music_play("mm_ending", 0); }
             }
             else if (level_no + 1 >= NUM_LEVELS) { scene = SC_END; scene_t = 0; music_play("mm_ending", 0); }
@@ -4401,6 +4893,7 @@ static int draw_front(void) {
     case SC_LOGO: draw_logo(); return 1;
     case SC_PRESS: draw_press(); break;
     case SC_SLOTS: draw_slots(); break;
+    case SC_BADGES: draw_badges(); break;
     case SC_TITLE: draw_title_screen(); break;
     case SC_SELECT: draw_select(); break;
     case SC_OPTIONS: if (opt_back == SC_PLAY) return 0; draw_options(); break;
@@ -4695,3 +5188,73 @@ static void draw_aftermath(void) {
 /* ---- voices and surfaces ---- */
 static void vo(int chr, const char *line) { char b[32]; snprintf(b, sizeof b, "vo_%s_%s", chr == 1 ? "rosie" : "joe", line); sfx(b); }
 static const char *land_sfx(void) { return level_no == L_PIZZA ? "land_tile" : (level_no == L_INK || level_no == L_ROOF) ? "land_metal" : "land_wood"; }
+
+/* ==================================================================================================
+   STAGEHAND BADGES (achievements)
+   ================================================================================================== */
+static const char *const BADGE[20][2] = {
+    {"FIRST NIGHT JITTERS", "BEAT SHOW 1"},
+    {"HALFWAY THERE", "BEAT SHOW 4"},
+    {"THE FINAL BOW", "BEAT SHOW 8"},
+    {"TRUE BELIEVER", "SEE THE TRUE ENDING"},
+    {"REEL FIND", "FIND YOUR FIRST FILM REEL"},
+    {"FILM BUFF", "FIND 12 FILM REELS"},
+    {"THE WHOLE COLLECTION", "FIND ALL 24 FILM REELS"},
+    {"STAR OF THE SHOW", "EARN AN S RANK"},
+    {"STANDING OVATION", "EARN S RANKS ON ALL 8 SHOWS"},
+    {"HARD HAT HERO", "BEAT A SHOW WITHOUT GETTING HIT"},
+    {"UNTOUCHABLE", "BEAT A BOSS WITHOUT GETTING HIT"},
+    {"QUICK CHANGE", "BEAT A SHOW IN UNDER 4 MINUTES"},
+    {"ELECTRICIAN OF THE YEAR", "FLIP 25 BREAKERS"},
+    {"MIDNIGHT RUN", "BEAT A SHOW ON MIDNIGHT (HARD)"},
+    {"ENCORE! ENCORE!", "FINISH THE BOSS RUSH"},
+    {"RUSH HOUR", "FINISH THE BOSS RUSH IN UNDER 8 MINUTES"},
+    {"BUDDY SYSTEM", "BEAT A SHOW WITH TWO PLAYERS"},
+    {"EYES ON THE CAMERAS", "BEAT A SHOW IN SECURITY CO-OP"},
+    {"DRESSED FOR SUCCESS", "WEAR A NEW OUTFIT"},
+    {"HIDE AND SEEK", "HIDE IN A PROP CLOSET"},
+};
+static int badge_sel; static float toast_t; static int toast_id = -1;
+static int has_badge(int b) { return (save.badge[b / 8] >> (b % 8)) & 1; }
+static void award(int b) {
+    if (demo_on || b < 0 || b >= 20 || has_badge(b)) return;
+    save.badge[b / 8] |= (unsigned char)(1 << (b % 8)); game_save();
+    toast_id = b; toast_t = 3.6f; sfx("reel");
+}
+static void draw_medal(float x, float y, float r, int got) {
+    if (got) draw_glow(&A.disc, x, y, r * 2, 255, 200, 90, 150);
+    fill_rect((int)(x - r * 0.35f), (int)(y - r * 1.9f), (int)(r * 0.3f), (int)(r * 1.2f), got ? 190 : 60, got ? 40 : 30, got ? 40 : 30, 255);
+    fill_rect((int)(x + r * 0.05f), (int)(y - r * 1.9f), (int)(r * 0.3f), (int)(r * 1.2f), got ? 40 : 30, got ? 70 : 30, got ? 160 : 40, 255);
+    draw_ellipse(&A.disc, x, y, r, r, got ? 120 : 40, got ? 80 : 32, got ? 20 : 28, 255);
+    draw_ellipse(&A.disc, x, y, r * 0.84f, r * 0.84f, got ? 255 : 70, got ? 205 : 60, got ? 80 : 50, 255);
+    if (got) { draw_bar(x - r * 0.45f, y, x + r * 0.45f, y, r * 0.18f, 160, 110, 30, 255); draw_bar(x, y - r * 0.45f, x, y + r * 0.45f, r * 0.18f, 160, 110, 30, 255); }
+    else draw_text_col(&A.small, "?", x, y - r * 0.6f, r / 30.0f, 1, 120, 100, 80, 255);
+}
+static void step_badges(unsigned anyp) {
+    if (anyp & B_LEFT) { badge_sel = (badge_sel + 19) % 20; sfx("menu"); }
+    if (anyp & B_RIGHT) { badge_sel = (badge_sel + 1) % 20; sfx("menu"); }
+    if (anyp & B_UP) { badge_sel = (badge_sel + 15) % 20; sfx("menu"); }
+    if (anyp & B_DOWN) { badge_sel = (badge_sel + 5) % 20; sfx("menu"); }
+    if (anyp & (BACK_BITS() | OK_BITS())) { sfx("menu"); scene = SC_EXTRAS; scene_t = 0; }
+}
+static void draw_badges(void) {
+    draw_curtains(1); draw_header("STAGEHAND BADGES");
+    for (int i = 0; i < 20; i++) { float x = 70 + (i % 4) * 290, y = 150 + (i / 4) * 80; int on = i == badge_sel, got = has_badge(i);
+        if (on) fill_rect((int)x - 8, (int)y - 6, 284, 70, 120, 26, 22, 200);
+        draw_medal(x + 32, y + 36, 20, got);
+        const char *nm = got ? BADGE[i][0] : "? ? ?";
+        draw_text_col(&A.small, nm, x + 64, y + 20, fit(&A.small, nm, 0.4f, 206), 0, got ? 255 : 160, got ? 230 : 140, got ? 170 : 120, 255); }
+    char b[128]; snprintf(b, sizeof b, "%s", has_badge(badge_sel) ? BADGE[badge_sel][0] : "? ? ?");
+    draw_text_col(&A.font, b, SCREEN_W / 2, 562, fit(&A.font, b, 0.55f, 1100), 1, 255, 226, 160, 255);
+    draw_text_col(&A.small, BADGE[badge_sel][1], SCREEN_W / 2, 610, fit(&A.small, BADGE[badge_sel][1], 0.5f, 1100), 1, 230, 200, 160, 255);
+    draw_hint("[DPAD] CHOOSE   [BACK] BACK");
+}
+static void draw_toast(void) {
+    if (toast_t <= 0 || toast_id < 0) return;
+    toast_t -= DT * (scene == SC_PLAY && paused ? 0 : 1) ;
+    float k = fminf(1, fminf((3.6f - toast_t) * 4, toast_t * 3)), x = SCREEN_W - 430 + (1 - k) * 460, y = 96;
+    fill_rect((int)x, (int)y, 410, 76, 30, 12, 8, 235); fill_rect((int)x, (int)y, 410, 3, 230, 180, 80, 255);
+    draw_medal(x + 42, y + 42, 22, 1);
+    draw_text_col(&A.small, "BADGE EARNED", x + 84, y + 10, 0.42f, 0, 255, 200, 110, 255);
+    draw_text_col(&A.small, BADGE[toast_id][0], x + 84, y + 38, fit(&A.small, BADGE[toast_id][0], 0.5f, 316), 0, 255, 240, 210, 255);
+}

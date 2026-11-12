@@ -17,6 +17,8 @@ void game_touch(float x, float y);    /* a tap on the GamePad screen, 0..1 */
 int game_wants_quit(void);
 int game_layout(void);                /* 0: B jumps, A shoots   1: A jumps, B shoots (Options) */
 int game_take_rumble(int pad, float *strength, int *ms);   /* a buzz the game wants on this controller (Options can turn it off) */
+void game_controller_lost(void);      /* a controller dropped out: show a friendly card */
+void game_controller_found(void);
 void game_focus_lost(void);           /* HOME button / app switched away: pause */
 void game_goto(const char *scene);    /* tests: "title", "level", "boss", "fiend" */
 #endif

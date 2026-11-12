@@ -163,7 +163,7 @@ int font_load(Font *f, const char *name) {
 
 int text_width(Font *f, const char *s, float scale) {
     float w = 0;
-    for (; *s; s++) w += f->g[(unsigned char)*s & 127].adv * scale;
+    for (; *s; s++) { unsigned char c = (unsigned char)*s; w += f->g[c < 9 ? (unsigned char)"\0NAEIOU?!"[c] : c & 127].adv * scale; }
     return (int)w;
 }
 
@@ -174,11 +174,20 @@ static void text_pass(Font *f, const char *s, float x, float y, float sx, float 
     SDL_SetTextureAlphaMod(f->tex.tex, alpha);
     SDL_SetTextureColorMod(f->tex.tex, shadow ? 0 : tint[0], shadow ? 0 : tint[1], shadow ? 0 : tint[2]);
     for (; *s; s++) {
-        Glyph *g = &f->g[(unsigned char)*s & 127];
-        if (g->w > 0 && *s != ' ') {
+        /* Spanish: bytes 1-8 are Ñ Á É Í Ó Ú ¿ ¡ -- the base letter plus a mark drawn from the font's own ~ ' ? ! */
+        unsigned char c = (unsigned char)*s, base = c < 9 ? (unsigned char)"\0NAEIOU?!"[c] : (unsigned char)(c & 127);
+        Glyph *g = &f->g[base];
+        if (g->w > 0 && base != ' ') {
             SDL_Rect src = {g->x, g->y, g->w, g->h};
             SDL_FRect d = {x, y, g->w * sx, g->h * sy};
-            SDL_RenderCopyF(R, f->tex.tex, &src, &d);
+            if (c == 7 || c == 8) SDL_RenderCopyExF(R, f->tex.tex, &src, &d, 0, NULL, SDL_FLIP_VERTICAL | SDL_FLIP_HORIZONTAL);   /* ¿ ¡ */
+            else SDL_RenderCopyF(R, f->tex.tex, &src, &d);
+            if (c >= 1 && c <= 6) {   /* the mark above */
+                Glyph *m = &f->g[c == 1 ? '~' : '\''];
+                if (m->w > 0) { float k = 0.75f; SDL_Rect ms = {m->x, m->y, m->w, m->h};
+                    SDL_FRect md = {x + (g->w * sx - m->w * sx * k) / 2 + (c == 1 ? 0 : g->w * sx * 0.08f), y - g->h * sy * (c == 1 ? 0.30f : 0.26f), m->w * sx * k, m->h * sy * k};
+                    SDL_RenderCopyF(R, f->tex.tex, &ms, &md); }
+            }
         }
         x += g->adv * sx;
     }

@@ -58,6 +58,7 @@ static void sanitize(SaveData *d) {   /* never trust the file blindly */
     if (d->outfit > 4) d->outfit = 0;
     if (d->style > 1) d->style = 0;
     if (d->runner > 1) d->runner = 0;
+    if (d->language > 1) d->language = 0;
 }
 static int read_file(int slot, SaveData *out) {
     char p[256]; path(p, sizeof p, slot, "");
@@ -70,7 +71,7 @@ static int read_file(int slot, SaveData *out) {
 }
 static void apply_settings(const SaveData *s) {
     save.music_vol = s->music_vol; save.sfx_vol = s->sfx_vol; save.rumble = s->rumble; save.layout = s->layout;
-    save.shake = s->shake; save.difficulty = s->difficulty; save.style = s->style;
+    save.shake = s->shake; save.difficulty = s->difficulty; save.style = s->style; save.language = s->language;
 }
 static int write_file(int slot, const SaveData *d) {
     char p[256], tmp[256]; path(p, sizeof p, slot, ""); path(tmp, sizeof tmp, slot, ".tmp");

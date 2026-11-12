@@ -163,10 +163,11 @@ int main(int argc, char **argv) {
                 SDL_GameController *c = SDL_GameControllerOpen(ev.cdevice.which);
                 int dup = 0; for (int i = 0; i < MAX_PADS; i++) if (gc[i] == c) dup = 1;
                 if (c && !dup) for (int i = 0; i < MAX_PADS; i++) if (!gc[i]) { gc[i] = c; break; }
+                if (c && !dup) game_controller_found();
             }
             if (ev.type == SDL_CONTROLLERDEVICEREMOVED) {
                 SDL_GameController *c = SDL_GameControllerFromInstanceID(ev.cdevice.which);
-                for (int i = 0; i < MAX_PADS; i++) if (c && gc[i] == c) { SDL_GameControllerClose(c); gc[i] = NULL; }
+                for (int i = 0; i < MAX_PADS; i++) if (c && gc[i] == c) { SDL_GameControllerClose(c); gc[i] = NULL; game_controller_lost(); }
             }
             /* GamePad touch screen (and the mouse on the PC GamePad window) */
             if (ev.type == SDL_FINGERDOWN) game_touch(ev.tfinger.x, ev.tfinger.y);

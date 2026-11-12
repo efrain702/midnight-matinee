@@ -15,7 +15,9 @@ typedef struct {
     int rush_best;                        /* boss rush, tenths of a second, 0 = none */
     /* settings */
     unsigned char music_vol, sfx_vol, rumble, layout, shake, difficulty, outfit, style, runner;
-    unsigned char spare[15];
+    unsigned char badge[4];        /* Stagehand Badges earned (bits) */
+    unsigned char language, breakers_flipped, closets_hidden;
+    unsigned char spare[8];
 } SaveData;
 
 #define SAVE_SLOTS 3
