@@ -24,7 +24,8 @@ static float signf(float v) { return v < 0 ? -1.0f : 1.0f; }
 
 /* ------------------------------------------------------------ assets */
 #define HERO_FRAMES 8
-typedef struct { Tex hero[3][HERO_FRAMES]; Tex usher[5], dog[5], blob[4], inky[3], gore[12], goat[5], meat[5], slice[5], rat[5], cleaver, gore2[12], bg2, bomb[5], ghost[5], glove[5], splicer[3], bg3, imp[5], worker[5], eel[5], press[3], bg4, suitcase[5], soldier[5], umbrella[5], collector[3], bg5, unbound[3], bg6; Tex bg, disc, vignette, mask, grain[4]; Font font, small; } Assets;
+#define NCHARS 2   /* 0 Junior, 1 Rosie */
+typedef struct { Tex hero[NCHARS][3][HERO_FRAMES]; Tex usher[5], dog[5], blob[4], inky[3], gore[12], goat[5], meat[5], slice[5], rat[5], cleaver, gore2[12], bg2, bomb[5], ghost[5], glove[5], splicer[3], bg3, imp[5], worker[5], eel[5], press[3], bg4, suitcase[5], soldier[5], umbrella[5], collector[3], bg5, unbound[3], bg6; Tex bg, disc, vignette, mask, grain[4]; Font font, small; } Assets;
 static Assets A;
 static Font padFont, padSmall; static Tex padDisc;
 
@@ -383,7 +384,7 @@ static int overlap(float ax, float ay, float aw, float ah, float bx, float by, f
 enum { W_NAIL, W_RIVET, W_TORCH, W_PLUNGER, NWEAP };
 static const char *WEAP_NAME[NWEAP] = {"NAIL GUN", "RIVET SPREAD", "WELDING TORCH", "PLUNGER LAUNCHER"};
 typedef struct {
-    int active, pad, alive, gear, lives, face, onground, hidden, crouch, weapon, aim_dx, aim_dy, shooting, closet_tx;
+    int active, pad, alive, gear, lives, face, onground, hidden, crouch, weapon, aim_dx, aim_dy, shooting, closet_tx, chr;
     float x, y, vx, vy, inv, cool, anim, dead_t, shoot_t, bob;
 } Player;
 static Player pl[2];
@@ -408,7 +409,9 @@ static Pickup pick[8];
 /* world state */
 static float power = 100, lit[6], camx, shake, msg_t, warn_t, cam_flash;
 static char msg[64];
-static int scene, menu_sel, cam_sel = 0, quit_req, frame_no, darkness_on;
+static int p1_char = -1;   /* runner picked on the title screen; player 2 gets the other one */
+static const char *CHAR_NAME[NCHARS] = {"JUNIOR", "ROSIE"};
+static int scene, menu_sel = 1, cam_sel = 0, quit_req, frame_no, darkness_on;
 enum { SC_TITLE, SC_PLAY, SC_OVER, SC_CLEAR, SC_END };
 static float scene_t, ping_cool, op_idle;
 static float film_phase(int tx) { return fmodf(scene_t + (tx / 5) * 1.1f, 3.2f); }
@@ -519,6 +522,8 @@ static void reset_player(Player *p, int full) {
     int tx = checkpoints[cur_check];
     p->x = tx * TILE + TILE / 2 + (p == &pl[1] ? 40 : 0); p->y = FLOOR_Y - 2; p->vx = p->vy = 0;
     p->alive = 1; p->gear = 3; p->inv = 2.0f; p->hidden = 0; p->face = 1; p->dead_t = 0;
+    if (p1_char < 0) p1_char = getenv("MM_CHAR") ? atoi(getenv("MM_CHAR")) % NCHARS : 0;
+    p->chr = p == &pl[0] ? p1_char : (p1_char + 1) % NCHARS;
     if (full) { p->lives = 3; p->weapon = getenv("MM_WEAPON") ? atoi(getenv("MM_WEAPON")) % NWEAP : W_NAIL; }
 }
 
@@ -545,7 +550,7 @@ static void hurt_player(Player *p, float from_x) {
     p->vx = (p->x < from_x ? -1 : 1) * 260; p->vy = -420;
     sfx("hurt");
     if (p->gear == 2) { for (int i = 0; i < 6; i++) part(p->x, p->y - 140, (frand() - 0.5f) * 300, -300 - frand() * 200, 0.9f, 9, 900, 230, 180, 50, 0); message("THERE GOES THE HARD HAT!", 1.4f); }
-    if (p->gear == 1) { for (int i = 0; i < 10; i++) part(p->x, p->y - 70, (frand() - 0.5f) * 400, -300 - frand() * 200, 1.0f, 8, 900, 70, 100, 150, 0); message("DOWN TO YOUR BOXERS!", 1.4f); }
+    if (p->gear == 1) { for (int i = 0; i < 10; i++) part(p->x, p->y - 70, (frand() - 0.5f) * 400, -300 - frand() * 200, 1.0f, 8, 900, 70, 100, 150, 0); message(p->chr == 1 ? "DOWN TO YOUR UNDERSHIRT!" : "DOWN TO YOUR BOXERS!", 1.4f); }
     if (p->gear <= 0) { p->alive = 0; p->dead_t = 0; p->vy = -700; sfx("boom"); ink_burst(p->x, p->y - 60, 20, 300); }
 }
 static void kill_player(Player *p) { if (!p->alive) return; if (god_mode()) { reset_player(p, 0); return; } p->gear = 1; p->inv = 0; p->hidden = 0; hurt_player(p, p->x); }
@@ -576,13 +581,14 @@ static Tex make_light_mask(void) {   /* black everywhere except a soft hole in t
 void game_init(void) {
     srand(1234);
     font_load(&A.font, "font"); font_load(&A.small, "font_small"); font_set_small(&A.font, &A.small);
-    const char *sets[3] = {"hero", "hero_b", "hero_c"};
+    const char *sets[NCHARS][3] = {{"hero", "hero_b", "hero_c"}, {"rosie", "rosie_b", "rosie_c"}};
     char rel[64];
-    for (int s = 0; s < 3; s++) for (int i = 0; i < HERO_FRAMES; i++) {
-        snprintf(rel, sizeof rel, "chars/%s_%d.png", sets[s], i);
-        A.hero[s][i] = load_or_empty(rel);
-        if (!A.hero[s][i].tex && s > 0) A.hero[s][i] = A.hero[0][i];
-        if (!A.hero[s][i].tex && i > 0) A.hero[s][i] = A.hero[s][0];   /* gear art not made yet: reuse full gear */
+    for (int c = 0; c < NCHARS; c++) for (int s = 0; s < 3; s++) for (int i = 0; i < HERO_FRAMES; i++) {
+        snprintf(rel, sizeof rel, "chars/%s_%d.png", sets[c][s], i);
+        Tex *t = &A.hero[c][s][i]; *t = load_or_empty(rel);
+        if (!t->tex && s > 0) *t = A.hero[c][0][i];
+        if (!t->tex && i > 0) *t = A.hero[c][s][0];   /* gear art not made yet: reuse full gear */
+        if (!t->tex && c > 0) *t = A.hero[0][s][i];   /* character not drawn yet: borrow Junior */
     }
     for (int i = 0; i < 5; i++) {
         snprintf(rel, sizeof rel, "chars/usher_%d.png", i); A.usher[i] = load_or_empty(rel); if (!A.usher[i].tex && i) A.usher[i] = A.usher[i % 2];
@@ -788,7 +794,7 @@ static void update_player(Player *p, const Input *in) {
     /* pickups */
     for (int i = 0; i < 8; i++) if (pick[i].alive && overlap(p->x, p->y, w, hh, pick[i].x, pick[i].y, 50, 50)) {
         pick[i].alive = 0; sfx("pickup");
-        if (pick[i].kind == 10) { if (p->gear < 3) p->gear++; message(p->gear == 3 ? "FULL GEAR!" : "OVERALLS BACK ON!", 1.4f); score += 500; }
+        if (pick[i].kind == 10) { if (p->gear < 3) p->gear++; message(p->gear == 3 ? "FULL GEAR!" : p->chr == 1 ? "COVERALLS BACK ON!" : "OVERALLS BACK ON!", 1.4f); score += 500; }
         else { int k = ((int)(pick[i].t / 0.6f)) % NWEAP; p->weapon = k; message(WEAP_NAME[k], 1.4f); score += 200; }
     }
 }
@@ -845,7 +851,7 @@ static Tex *enemy_tex(Enemy *e) {
     case E_BOMB: return &A.bomb[e->state == 1 ? 4 : !e->onground ? 2 : e->land > 0 ? 3 : e->timer < 0.2f ? 1 : 0];
     case E_GHOST: return &A.ghost[e->state == 1 ? 4 : ghost_faded(e) ? 3 : ((int)(e->t * 3)) % 2];
     case E_GLOVE: return &A.glove[e->state == 0 ? ((int)(e->t * 8)) % 2 : e->state == 1 ? 2 : e->state == 2 ? 3 : 4];
-    case E_SHADOW: return &A.hero[0][!e->onground ? 5 : fabsf(e->vx) > 20 ? 1 + ((int)(e->t * 8)) % 4 : 0];
+    case E_SHADOW: return &A.hero[pl[0].chr][0][!e->onground ? 5 : fabsf(e->vx) > 20 ? 1 + ((int)(e->t * 8)) % 4 : 0];
     case E_SUITCASE: return &A.suitcase[e->flash > 3 ? 4 : !e->onground ? 2 : e->land > 0 ? 3 : e->timer < 0.25f ? 1 : 0];
     case E_SOLDIER: return &A.soldier[e->flash > 3 ? 4 : e->state == 1 ? (e->timer > 0.15f ? 2 : 3) : (fabsf(e->vx) > 5 ? ((int)(e->t * 6)) % 2 : 0)];
     case E_UMBRELLA: return &A.umbrella[e->flash > 3 ? 4 : e->state == 1 ? 3 : ((int)(e->t * 8)) % 3];
@@ -2090,13 +2096,18 @@ void game_step(const Input pads[MAX_PADS], const int connected[MAX_PADS]) {
     unsigned anyp = 0; for (int i = 0; i < MAX_PADS; i++) anyp |= pads[i].pressed;
 
     if (scene == SC_TITLE) {
-        if (anyp & B_LEFT) { level_no = (level_no + NUM_LEVELS - 1) % NUM_LEVELS; sfx("menu"); }
-        if (anyp & B_RIGHT) { level_no = (level_no + 1) % NUM_LEVELS; sfx("menu"); }
-        if (anyp & B_UP) { menu_sel = (menu_sel + 2) % 3; sfx("menu"); }
-        if (anyp & B_DOWN) { menu_sel = (menu_sel + 1) % 3; sfx("menu"); }
-        if (anyp & (B_START | B_JUMP | B_SHOOT)) {
-            if (menu_sel == 0) { mode = 0; sfx("checkpoint"); start_level(); }
-            else if (menu_sel == 1) {
+        if (p1_char < 0) p1_char = getenv("MM_CHAR") ? atoi(getenv("MM_CHAR")) % NCHARS : 0;
+        if (menu_sel == 0) {   /* the runner row: left/right (or A) picks who you play */
+            if (anyp & (B_LEFT | B_RIGHT | B_JUMP | B_SHOOT)) { p1_char = (p1_char + 1) % NCHARS; sfx("menu"); }
+        } else {
+            if (anyp & B_LEFT) { level_no = (level_no + NUM_LEVELS - 1) % NUM_LEVELS; sfx("menu"); }
+            if (anyp & B_RIGHT) { level_no = (level_no + 1) % NUM_LEVELS; sfx("menu"); }
+        }
+        if (anyp & B_UP) { menu_sel = (menu_sel + 3) % 4; sfx("menu"); }
+        if (anyp & B_DOWN) { menu_sel = (menu_sel + 1) % 4; sfx("menu"); }
+        if ((anyp & B_START) || (menu_sel > 0 && (anyp & (B_JUMP | B_SHOOT)))) {
+            if (menu_sel <= 1) { mode = 0; sfx("checkpoint"); start_level(); }
+            else if (menu_sel == 2) {
                 if (connected[1]) { mode = 1; sfx("checkpoint"); start_level(); }
                 else { sfx("tick"); message("CONNECT A WII REMOTE OR PRO CONTROLLER FOR THE RUNNER", 2.5f); }
             } else { sfx("tick"); message("POSSESSED PARTY MODE IS COMING SOON", 2.0f); }
@@ -2414,7 +2425,7 @@ static void draw_player(Player *p, float ox, float oy) {
     double ang = p->alive ? 0 : p->dead_t * 600;
     float x = sx(p->x) + ox, y = p->y + oy + 4;
     draw_ellipse(&A.disc, x, FLOOR_Y + oy - 2 > y ? y - 2 : y - 2, 34, 7, 0, 0, 0, p->onground ? 90 : 40);
-    draw_sprite(&A.hero[set][fr], x, y, 1, p->face > 0, 0, 255, ang, sy);
+    draw_sprite(&A.hero[p->chr][set][fr], x, y, 1, p->face > 0, 0, 255, ang, sy);
     if (p->shoot_t > 0.08f) {
         float mx = x + p->face * 52, my = y - 82;
         if (p->aim_dy < 0 && p->aim_dx) { mx = x + p->face * 50; my = y - 130; } else if (p->aim_dy < 0) { mx = x + p->face * 18; my = y - 160; }
@@ -2568,7 +2579,7 @@ static void draw_hud(void) {
         float x = i == 0 ? 20 : SCREEN_W - 300, y = 16;
         fill_rect((int)x, (int)y, 280, 74, 20, 12, 8, 190); fill_rect((int)x, (int)y, 280, 3, 200, 160, 90, 255);
         draw_text_col(&A.small, i == 0 ? "P1" : "P2", x + 12, y + 8, 0.55f, 0, 255, 220, 150, 255);
-        const char *gl[3] = {"BOXERS", "OVERALLS", "FULL GEAR"};
+        const char *gl[3] = {p->chr == 1 ? "UNDERSHIRT" : "BOXERS", p->chr == 1 ? "COVERALLS" : "OVERALLS", "FULL GEAR"};
         for (int g = 0; g < 3; g++) { int on = p->gear > g; float gx = x + 58 + g * 30;
             draw_ellipse(&A.disc, gx, y + 22, 11, 11, on ? (g == 2 ? 235 : g == 1 ? 80 : 245) : 60, on ? (g == 2 ? 185 : g == 1 ? 120 : 245) : 50, on ? (g == 2 ? 50 : g == 1 ? 190 : 245) : 46, 255); }
         draw_text_col(&A.small, gl[p->gear > 0 ? p->gear - 1 : 0], x + 150, y + 10, 0.45f, 0, 240, 230, 210, 255);
@@ -2671,13 +2682,21 @@ static void draw_title(void) {
     draw_text_col(&A.font, "MATINEE", mx + mw / 2, my + 112, 1.9f, 1, 255, 210, 120, 255);
     { char b[96]; snprintf(b, sizeof b, "<  SHOW %d: %s  >", level_no + 1, LEVELS[level_no].title);
       draw_text_col(&A.small, b, mx + mw / 2, my + mh + 16, 0.66f, 1, 255, 220, 150, 255); }
-    const char *items[3] = {"SOLO  (GAMEPAD RUNS THE CAMERAS TOO)", "SECURITY OFFICE CO-OP", "POSSESSED PARTY MODE  (SOON)"};
-    for (int i = 0; i < 3; i++) {
-        float y = 420 + i * 62; int s = menu_sel == i;
-        if (s) fill_rect(150, (int)y - 6, 660, 50, 120, 26, 22, 200);
-        draw_text_col(&A.font, items[i], 480, y, 0.62f, 1, s ? 255 : 190, s ? 236 : 170, s ? 180 : 140, i == 2 ? 150 : 255);
+    int pc = p1_char < 0 ? 0 : p1_char;
+    char runner[64]; snprintf(runner, sizeof runner, "RUNNER:  <  %s  >", CHAR_NAME[pc]);
+    const char *items[4] = {runner, "SOLO  (GAMEPAD RUNS THE CAMERAS TOO)", "SECURITY OFFICE CO-OP", "POSSESSED PARTY MODE  (SOON)"};
+    for (int i = 0; i < 4; i++) {
+        float y = 392 + i * 56; int s = menu_sel == i;
+        if (s) fill_rect(150, (int)y - 6, 660, 46, 120, 26, 22, 200);
+        draw_text_col(&A.font, items[i], 480, y, 0.6f, 1, s ? 255 : 190, s ? 236 : 170, s ? 180 : 140, i == 3 ? 150 : 255);
     }
-    draw_text_col(&A.small, "UP/DOWN: MODE   LEFT/RIGHT: SHOW   A / +: START", 480, 620, 0.5f, 1, 220, 200, 170, (Uint8)(150 + 100 * sinf(t * 4)));
+    /* the picked runner stands beside the menu, the other one waits for player 2 */
+    { float bob = sinf(t * 3) * 3;
+      draw_sprite(&A.hero[(pc + 1) % NCHARS][0][0], 116, 548 - bob, 0.82f, 1, 0, 130, 0, 1);
+      draw_sprite(&A.hero[pc][0][0], 66, 566 + bob, 1.05f, 1, 0, 255, 0, 1);
+      draw_text_col(&A.small, "P1", 66, 576, 0.5f, 1, 255, 220, 150, 255);
+      draw_text_col(&A.small, "P2", 120, 556, 0.42f, 1, 220, 200, 170, 150); }
+    draw_text_col(&A.small, menu_sel == 0 ? "LEFT/RIGHT: PICK YOUR RUNNER   UP/DOWN: MENU   +: START" : "UP/DOWN: MENU   LEFT/RIGHT: SHOW   A / +: START", 480, 620, 0.5f, 1, 220, 200, 170, (Uint8)(150 + 100 * sinf(t * 4)));
     if (msg_t > 0) draw_text_col(&A.small, msg, SCREEN_W / 2, 668, 0.55f, 1, 255, 120, 90, 255);
 }
 

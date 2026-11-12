@@ -97,6 +97,9 @@ The GamePad shows its own picture: six live camera feeds of the theatre.
 
 ## Modes
 * **Solo**: the GamePad player runs and works the cameras.
+* **Two runners**: **Junior**, the short-fused electrician, and **Rosie**, a riveter in a polka-dot bandana. Pick yours
+  on the title screen (the RUNNER row, Left/Right); a second runner who clocks in gets the other one. Both lose their
+  gear the same way: hard hat, then overalls / coveralls, then down to Junior's heart boxers or Rosie's polka-dot shorts.
 * **Security Office co-op**: one player on the GamePad works the cameras, the runner uses a Wii Remote / Pro Controller.
   A second runner can clock in any time with + on another controller.
 * **Possessed party mode** (coming soon).
