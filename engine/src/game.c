@@ -23,15 +23,15 @@ static float clampf(float v, float a, float b) { return v < a ? a : v > b ? b : 
 static float signf(float v) { return v < 0 ? -1.0f : 1.0f; }
 
 /* ------------------------------------------------------------ assets */
-#define HERO_FRAMES 7
-typedef struct { Tex hero[3][HERO_FRAMES]; Tex usher[2], dog[2], blob[2], inky[3]; Tex bg, disc, vignette, mask, grain[4]; Font font, small; } Assets;
+#define HERO_FRAMES 8
+typedef struct { Tex hero[3][HERO_FRAMES]; Tex usher[5], dog[5], blob[4], inky[3], gore[12]; Tex bg, disc, vignette, mask, grain[4]; Font font, small; } Assets;
 static Assets A;
 static Font padFont, padSmall; static Tex padDisc;
 
 /* ------------------------------------------------------------ level */
 static char map[LH][LW + 1];
 enum { E_USHER, E_DOG, E_BLOB, E_MINIBLOB, E_CRATE, E_HATCRATE };
-typedef struct { int type, alive, hp, face, state, flash, onground; float x, y, vx, vy, t, timer, marked, stun, plat0, plat1; } Enemy;
+typedef struct { int type, alive, hp, face, state, flash, onground; float x, y, vx, vy, t, timer, marked, stun, plat0, plat1, burn, btick, land; } Enemy;
 #define MAXE 96
 static Enemy en[MAXE]; static int nen;
 typedef struct { int tx, used; } Breaker;
@@ -160,7 +160,8 @@ enum { P_NAIL, P_RIVET, P_FLAME, P_PLUNGER, P_LIGHT, P_NOTE, P_TICKET, P_DRIP };
 typedef struct { int type, alive, enemy, dmg, bounces, last_hit; float x, y, vx, vy, life, grav, r; } Proj;
 #define MAXP 160
 static Proj pr[MAXP];
-typedef struct { float x, y, vx, vy, life, max, size, grav; Uint8 r, g, b, add; } Part;
+enum { PK_DOT, PK_BLOOD, PK_SMOKE, PK_EMBER, PK_CASING, PK_DEBRIS };
+typedef struct { float x, y, vx, vy, life, max, size, grav, ang, vang; Uint8 r, g, b, add, kind; } Part;
 #define MAXPART 500
 static Part parts[MAXPART];
 
@@ -188,7 +189,7 @@ static void message(const char *s, float t) { snprintf(msg, sizeof msg, "%s", s)
 
 static void part(float x, float y, float vx, float vy, float life, float size, float grav, Uint8 r, Uint8 g, Uint8 b, int add) {
     for (int i = 0; i < MAXPART; i++) if (parts[i].life <= 0) {
-        parts[i] = (Part){x, y, vx, vy, life, life, size, grav, r, g, b, (Uint8)add}; return;
+        parts[i] = (Part){x, y, vx, vy, life, life, size, grav, 0, 0, r, g, b, (Uint8)add, PK_DOT}; return;
     }
 }
 static void ink_burst(float x, float y, int n, float spd) {
@@ -199,6 +200,69 @@ static void spark_burst(float x, float y, int n, Uint8 r, Uint8 g, Uint8 b) {
     for (int i = 0; i < n; i++) { float a = frand() * 6.283f, s = 150 + frand() * 300;
         part(x, y, cosf(a) * s, sinf(a) * s, 0.25f + frand() * 0.3f, 3 + frand() * 4, 300, r, g, b, 1); }
 }
+
+/* ---------------- effects: kinds of particle, gibs, splatter decals, shockwaves, hit-pause ---------------- */
+static Part *part_k(int kind, float x, float y, float vx, float vy, float life, float size, float grav, Uint8 r, Uint8 g, Uint8 b, int add) {
+    for (int i = 0; i < MAXPART; i++) if (parts[i].life <= 0) {
+        parts[i] = (Part){x, y, vx, vy, life, life, size, grav, frand() * 360, (frand() - 0.5f) * 900, r, g, b, (Uint8)add, (Uint8)kind}; return &parts[i];
+    }
+    return NULL;
+}
+static void blood_spurt(float x, float y, float dirx, int n, float spd) {   /* animatronic "blood": red oil mixed with ink */
+    for (int i = 0; i < n; i++) {
+        float a = atan2f(-0.6f, dirx) + (frand() - 0.5f) * 1.6f, v = spd * (0.4f + frand());
+        int ink = rand() % 3 == 0;
+        part_k(PK_BLOOD, x, y, cosf(a) * v, sinf(a) * v, 1.4f, 3 + frand() * 6, 1500, ink ? 14 : 150 + rand() % 40, ink ? 10 : 12, ink ? 12 : 18, 0);
+    }
+}
+static void smoke(float x, float y, int n, Uint8 shade) {
+    for (int i = 0; i < n; i++) part_k(PK_SMOKE, x + (frand() - 0.5f) * 20, y, (frand() - 0.5f) * 60, -40 - frand() * 70, 0.9f + frand() * 0.6f, 10 + frand() * 10, -20, shade, shade, shade, 0);
+}
+static void embers(float x, float y, int n) {
+    for (int i = 0; i < n; i++) part_k(PK_EMBER, x, y, (frand() - 0.5f) * 220, -100 - frand() * 220, 0.5f + frand() * 0.6f, 3 + frand() * 3, 200, 255, 140 + rand() % 80, 40, 1);
+}
+
+typedef struct { Tex *t; SDL_Rect src; float x, y, vx, vy, ang, vang, life, w, h; int flip, bleed, rest; } Gib;
+#define MAXGIB 140
+static Gib gibs[MAXGIB]; static int gib_next;
+static void gib(Tex *t, SDL_Rect src, float x, float y, float vx, float vy, float w, float h, int flip, int bleed) {
+    if (!t || !t->tex) return;
+    Gib *g = &gibs[gib_next]; gib_next = (gib_next + 1) % MAXGIB;
+    *g = (Gib){t, src, x, y, vx, vy, frand() * 360, (frand() - 0.5f) * 1100, 6.0f + frand() * 2, w, h, flip, bleed, 0};
+}
+static void gore_part(int idx, float x, float y, float spd, int bleed) {
+    Tex *t = &A.gore[idx]; if (!t->tex) return;
+    float a = -1.57f + (frand() - 0.5f) * 2.4f, v = spd * (0.5f + frand());
+    gib(t, (SDL_Rect){0, 0, t->w, t->h}, x, y, cosf(a) * v, sinf(a) * v, (float)t->w, (float)t->h, rand() & 1, bleed);
+}
+/* chop the sprite into a grid of chunks that fly apart */
+static void shatter(Tex *t, float cx, float feet, int flip, int cols, int rows, float spd, int bleed) {
+    if (!t || !t->tex) return;
+    int cw = t->w / cols, ch = t->h / rows;
+    for (int r = 0; r < rows; r++) for (int c = 0; c < cols; c++) {
+        SDL_Rect src = {c * cw, r * ch, cw, ch};
+        float lx = flip ? (t->w - (c + 0.5f) * cw) : (c + 0.5f) * cw;
+        float x = cx - t->w / 2.0f + lx, y = feet - t->h + (r + 0.5f) * ch;
+        float dx = x - cx, dy = y - (feet - t->h * 0.5f);
+        gib(t, src, x, y, dx * 4 + (frand() - 0.5f) * spd, dy * 3 - spd * (0.6f + frand() * 0.6f), (float)cw, (float)ch, flip, bleed && (rand() % 2));
+    }
+}
+
+typedef struct { float x, y, rx, ry, ang; int tex; Uint8 r, g, b, a; } Splat;
+#define MAXSPLAT 260
+static Splat splats[MAXSPLAT]; static int splat_next;
+static void splat(float x, float y, float size, int floor, Uint8 r, Uint8 g, Uint8 b) {
+    Splat *s = &splats[splat_next]; splat_next = (splat_next + 1) % MAXSPLAT;
+    int tex = (size > 9 && A.gore[8].tex) ? 8 + (rand() & 1) : -1;
+    *s = (Splat){x, y, size * (floor ? 2.2f : 1.0f), size * (floor ? 0.5f : 1.0f), floor ? 0 : frand() * 360, tex, r, g, b, (Uint8)(200 + rand() % 55)};
+}
+
+typedef struct { float x, y, r, max, life; Uint8 cr, cg, cb; } Ring;
+static Ring rings[16];
+static void ring(float x, float y, float max, Uint8 r, Uint8 g, Uint8 b) {
+    for (int i = 0; i < 16; i++) if (rings[i].life <= 0) { rings[i] = (Ring){x, y, 10, max, 0.45f, r, g, b}; return; }
+}
+static int hitstop;
 static Proj *proj(int type, float x, float y, float vx, float vy, int enemy, int dmg) {
     for (int i = 0; i < MAXP; i++) if (!pr[i].alive) {
         Proj *p = &pr[i]; memset(p, 0, sizeof *p);
@@ -212,12 +276,13 @@ static void reset_player(Player *p, int full) {
     int tx = checkpoints[cur_check];
     p->x = tx * TILE + TILE / 2 + (p == &pl[1] ? 40 : 0); p->y = FLOOR_Y - 2; p->vx = p->vy = 0;
     p->alive = 1; p->gear = 3; p->inv = 2.0f; p->hidden = 0; p->face = 1; p->dead_t = 0;
-    if (full) { p->lives = 3; p->weapon = W_NAIL; }
+    if (full) { p->lives = 3; p->weapon = getenv("MM_WEAPON") ? atoi(getenv("MM_WEAPON")) % NWEAP : W_NAIL; }
 }
 
 static void start_level(void) {
     build_level();
     memset(pr, 0, sizeof pr); memset(parts, 0, sizeof parts); memset(pick, 0, sizeof pick);
+    memset(gibs, 0, sizeof gibs); memset(splats, 0, sizeof splats); memset(rings, 0, sizeof rings); hitstop = 0;
     memset(&fiend, 0, sizeof fiend); memset(&boss, 0, sizeof boss); memset(lit, 0, sizeof lit);
     arena_locked = 0; power = 100; cur_check = 0; score = 0; cam_sel = 0;
     reset_player(&pl[0], 1); pl[0].active = 1;
@@ -270,13 +335,15 @@ void game_init(void) {
     for (int s = 0; s < 3; s++) for (int i = 0; i < HERO_FRAMES; i++) {
         snprintf(rel, sizeof rel, "chars/%s_%d.png", sets[s], i);
         A.hero[s][i] = load_or_empty(rel);
-        if (!A.hero[s][i].tex && s > 0) A.hero[s][i] = A.hero[0][i];   /* gear art not made yet: reuse full gear */
+        if (!A.hero[s][i].tex && s > 0) A.hero[s][i] = A.hero[0][i];
+        if (!A.hero[s][i].tex && i > 0) A.hero[s][i] = A.hero[s][0];   /* gear art not made yet: reuse full gear */
     }
-    for (int i = 0; i < 2; i++) {
-        snprintf(rel, sizeof rel, "chars/usher_%d.png", i); A.usher[i] = load_or_empty(rel);
-        snprintf(rel, sizeof rel, "chars/projdog_%d.png", i); A.dog[i] = load_or_empty(rel);
-        snprintf(rel, sizeof rel, "chars/blob_%d.png", i); A.blob[i] = load_or_empty(rel);
+    for (int i = 0; i < 5; i++) {
+        snprintf(rel, sizeof rel, "chars/usher_%d.png", i); A.usher[i] = load_or_empty(rel); if (!A.usher[i].tex && i) A.usher[i] = A.usher[i % 2];
+        snprintf(rel, sizeof rel, "chars/projdog_%d.png", i); A.dog[i] = load_or_empty(rel); if (!A.dog[i].tex && i) A.dog[i] = A.dog[i % 2];
+        if (i < 4) { snprintf(rel, sizeof rel, "chars/blob_%d.png", i); A.blob[i] = load_or_empty(rel); if (!A.blob[i].tex && i) A.blob[i] = A.blob[i % 2]; }
     }
+    for (int i = 0; i < 12; i++) { snprintf(rel, sizeof rel, "chars/gore_%d.png", i); A.gore[i] = load_or_empty(rel); }
     for (int i = 0; i < 3; i++) { snprintf(rel, sizeof rel, "chars/inky_%d.png", i); A.inky[i] = load_or_empty(rel); }
     A.bg = load_or_empty("bg/theater.jpg");
     for (int i = 0; i < 4; i++) { snprintf(rel, sizeof rel, "ui/grain%d.png", i); A.grain[i] = load_or_empty(rel); }
@@ -310,6 +377,12 @@ static void fire(Player *p) {
     else if (p->aim_dy > 0) { mx = p->x + p->aim_dx * 20; my = p->y - 30; }
     else if (p->crouch) { my = p->y - 48; }
     p->shoot_t = 0.15f;
+    for (int k = 0; k < (p->weapon == W_TORCH ? 1 : 3); k++) part(mx + dx * 10, my + dy * 10, dx * (200 + frand() * 300) + (frand() - 0.5f) * 120, dy * (200 + frand() * 300) + (frand() - 0.5f) * 120, 0.12f, 4, 0, 255, 230, 150, 1);
+    if (p->weapon == W_NAIL || p->weapon == W_RIVET) {   /* spent casing flips out the side */
+        Part *c = part_k(PK_CASING, p->x + p->face * 10, my + 6, -p->face * (120 + frand() * 120), -260 - frand() * 160, 2.5f, 3, 1600, 220, 180, 80, 0);
+        if (c) c->vang = 1400;
+    }
+    if (p->weapon == W_RIVET) smoke(mx, my, 1, 120);
     switch (p->weapon) {
     case W_NAIL: proj(P_NAIL, mx, my, dx * 1150, dy * 1150, 0, 1); p->cool = 0.11f; sfx("throw"); break;
     case W_RIVET:
@@ -417,19 +490,61 @@ static void enemy_box(Enemy *e, float *w, float *h) {
     default: *w = 56; *h = 48; break;
     }
 }
+static Tex *enemy_tex(Enemy *e) {
+    int walk = ((int)(e->t * 7)) % 4;
+    switch (e->type) {
+    case E_USHER: return &A.usher[e->state == 1 ? 4 : (fabsf(e->vx) > 5 ? walk : 0)];
+    case E_DOG: return &A.dog[e->state >= 1 ? 4 : walk];
+    case E_BLOB: case E_MINIBLOB: return &A.blob[!e->onground ? 2 : e->land > 0 ? 3 : e->timer < 0.25f ? 1 : 0];
+    }
+    return NULL;
+}
+static void gore_enemy(Enemy *e) {
+    float cx = e->x, cy = e->y - 60, k = e->type == E_MINIBLOB ? 0.6f : 1.0f;
+    Tex *t = enemy_tex(e);
+    switch (e->type) {
+    case E_USHER:   /* porcelain doll: head cracks open, arms fly, oil-blood everywhere */
+        shatter(t, e->x, e->y, e->face > 0, 3, 4, 420, 1);
+        gore_part(2, cx, cy - 60, 520, 0); gore_part(2, cx, cy - 60, 480, 0); gore_part(3, cx, cy - 70, 600, 1);
+        gore_part(3, cx, cy - 70, 560, 1); gore_part(4, cx, cy - 20, 500, 1); gore_part(4, cx, cy - 20, 460, 1);
+        gore_part(10, cx, cy, 500, 0); gore_part(11, cx, cy, 380, 1); gore_part(0, cx, cy, 450, 0);
+        blood_spurt(cx, cy - 40, -e->face, 40, 620); blood_spurt(cx, cy - 40, e->face, 20, 500);
+        break;
+    case E_DOG:     /* projector dog: blows apart into brass, lens glass and springs */
+        shatter(t, e->x, e->y, e->face > 0, 4, 3, 480, 1);
+        gore_part(6, cx, cy, 600, 0); gore_part(0, cx, cy, 560, 0); gore_part(0, cx, cy, 520, 0); gore_part(1, cx, cy, 540, 0);
+        gore_part(7, cx, cy, 500, 0); gore_part(5, cx, cy, 460, 1); gore_part(3, cx, cy - 20, 580, 1);
+        blood_spurt(cx, cy, -e->face, 26, 560); spark_burst(cx, cy, 24, 255, 210, 110); smoke(cx, cy, 8, 70);
+        ring(cx, cy, 110, 255, 220, 150); sfx("boom");
+        break;
+    default:        /* ink blob: bursts into a big ink splash that paints the room */
+        shatter(t, e->x, e->y, e->face > 0, 2, 2, 300 * k, 0);
+        for (int i = 0; i < (int)(30 * k); i++) { float a = frand() * 6.283f, v = 200 + frand() * 450;
+            part_k(PK_BLOOD, cx, e->y - 30 * k, cosf(a) * v, sinf(a) * v - 250, 1.4f, 4 + frand() * 8 * k, 1500, 12, 8, 12, 0); }
+        break;
+    }
+    hitstop = e->type == E_MINIBLOB ? 1 : 3;
+}
 static void enemy_damage(Enemy *e, int dmg) {
     if (e->marked > 0) dmg *= 2;
     e->hp -= dmg; e->flash = 6; sfx("hit");
+    if (e->type != E_CRATE && e->type != E_HATCRATE) {   /* every hit draws a little oil-blood */
+        float w, h; enemy_box(e, &w, &h);
+        blood_spurt(e->x, e->y - h * 0.6f, e->face > 0 ? -1 : 1, 6, 380);
+        e->vx += (e->face > 0 ? -1 : 1) * 60;
+    }
     if (e->hp > 0) return;
-    e->alive = 0; shake = 4;
+    e->alive = 0; shake = 6;
     float cx = e->x, cy = e->y - 40;
     if (e->type == E_CRATE || e->type == E_HATCRATE) {
         for (int i = 0; i < 8; i++) if (!pick[i].alive) { pick[i] = (Pickup){1, e->type == E_HATCRATE ? 10 : 0, cx, e->y - 30, -400, frand() * 2}; break; }
-        spark_burst(cx, cy, 16, 200, 150, 90); sfx("poof"); return;
+        spark_burst(cx, cy, 16, 200, 150, 90); sfx("poof");
+        for (int i = 0; i < 8; i++) part_k(PK_DEBRIS, cx, cy, (frand() - 0.5f) * 500, -200 - frand() * 400, 2.5f, 10 + frand() * 8, 1600, 150, 100, 55, 0);
+        return;
     }
     score += e->type == E_DOG ? 400 : e->type == E_USHER ? 300 : 100;
-    ink_burst(cx, cy, 18, 260); sfx("poof");
-    if (e->type == E_DOG || e->type == E_USHER) spark_burst(cx, cy, 14, 255, 200, 90);
+    ink_burst(cx, cy, 10, 260); sfx("poof");
+    gore_enemy(e);
     if (e->type == E_BLOB) for (int k = -1; k <= 1; k += 2) {   /* blobs split in two */
         for (int i = 0; i < MAXE; i++) if (!en[i].alive && (en[i].type == E_MINIBLOB || i >= nen)) {
             if (i >= nen) nen = i + 1;
@@ -479,6 +594,11 @@ static void update_enemies(void) {
             } else if (e->state == 2) {              /* projector beam */
                 e->timer -= DT;
                 float bx0 = e->x + e->face * 50, by = e->y - 76;
+                {   /* where the beam ends: a wall, or 700 px out */
+                    float ex = bx0; for (int k = 0; k < 70; k++) { ex += e->face * 10; if (solid_at((int)(ex / TILE), (int)(by / TILE))) break; }
+                    if (frame_no % 2 == 0) part(ex, by, (frand() - 0.5f) * 300, -100 - frand() * 200, 0.3f, 4, 600, 255, 240, 180, 1);
+                    if (frame_no % 10 == 0) { smoke(ex, by, 1, 60); splat(ex, by + (frand() - 0.5f) * 10, 7, 0, 30, 20, 12); }
+                }
                 for (int k = 0; k < 2; k++) { Player *p = &pl[k]; if (!p->active || !p->alive) continue;
                     float px0 = fminf(bx0, bx0 + e->face * 700), px1 = fmaxf(bx0, bx0 + e->face * 700);
                     if (p->x > px0 && p->x < px1 && by > p->y - (p->crouch ? 80 : 124) && by < p->y) hurt_player(p, e->x); }
@@ -493,8 +613,11 @@ static void update_enemies(void) {
         default: e->vx = 0; break;
         }
         e->vy += 2200 * DT; if (e->vy > 1200) e->vy = 1200;
+        int was_ground = e->onground;
         int r = move_box(&e->x, &e->y, &e->vx, &e->vy, w, h, 0);
         e->onground = (r & 1) != 0;
+        if (!was_ground && e->onground && (e->type == E_BLOB || e->type == E_MINIBLOB)) { e->land = 0.18f; part_k(PK_BLOOD, e->x, e->y - 6, -80, -120, 0.6f, 4, 1200, 12, 8, 12, 0); part_k(PK_BLOOD, e->x, e->y - 6, 80, -120, 0.6f, 4, 1200, 12, 8, 12, 0); }
+        if (e->land > 0) e->land -= DT;
         if ((r & 2) && e->type == E_DOG) e->vx = -e->vx;
         if (e->y > FLOOR_Y + 40) { e->alive = 0; ink_burst(e->x, FLOOR_Y, 10, 200); continue; }
         if (e->type != E_CRATE && e->type != E_HATCRATE)
@@ -544,6 +667,7 @@ static void update_fiend(void) {
 enum { BS_INTRO, BS_IDLE, BS_SLAM_AIM, BS_SLAM_HIT, BS_NOTES, BS_SWEEP_WARN, BS_SWEEP, BS_TICKETS, BS_DEAD };
 static void boss_start(void) {
     boss.active = 1; boss.state = BS_INTRO; boss.timer = 2.6f; boss.maxhp = boss.hp = 110;
+    if (getenv("MM_BOSS_HP")) boss.hp = atoi(getenv("MM_BOSS_HP"));   /* tests */
     boss.x = ARENA_X + SCREEN_W - 230; boss.y = FLOOR_Y;
     arena_locked = 1; music_play("mm_boss1", 1); sfx("roar1"); shake = 10;
 }
@@ -576,7 +700,13 @@ static void update_boss(void) {
     case BS_SLAM_AIM:
         boss.pose = 1;
         if (boss.timer > 0.3f && t) boss.targetx += (t->x - boss.targetx) * 0.08f;   /* tracks you, then commits */
-        if (boss.timer <= 0) { boss.state = BS_SLAM_HIT; boss.timer = 0.32f; shake = 12; sfx("slam"); ink_burst(boss.targetx, FLOOR_Y, 16, 300); }
+        if (boss.timer <= 0) {
+            boss.state = BS_SLAM_HIT; boss.timer = 0.32f; shake = 14; sfx("slam"); hitstop = 2;
+            ink_burst(boss.targetx, FLOOR_Y, 16, 300); ring(boss.targetx, FLOOR_Y - 10, 180, 255, 230, 190);
+            for (int k = 0; k < 10; k++) part_k(PK_DEBRIS, boss.targetx + (frand() - 0.5f) * 60, FLOOR_Y - 8, (frand() - 0.5f) * 700, -300 - frand() * 500, 2.0f, 8 + frand() * 10, 1700, 110, 70, 40, 0);
+            for (int k = 0; k < 12; k++) part_k(PK_BLOOD, boss.targetx, FLOOR_Y - 10, (frand() - 0.5f) * 600, -300 - frand() * 600, 1.4f, 5 + frand() * 6, 1500, 12, 8, 12, 0);
+            smoke(boss.targetx, FLOOR_Y - 10, 5, 80);
+        }
         break;
     case BS_SLAM_HIT:
         boss.pose = 1;
@@ -600,6 +730,8 @@ static void update_boss(void) {
         boss.pose = 0; if (boss.timer <= 0) { boss.state = BS_SWEEP; boss.sweepx = boss.x - 140; sfx("power"); } break;
     case BS_SWEEP:
         boss.sweepx -= 760 / angry * DT;
+        if (frame_no % 2 == 0) part(boss.sweepx, FLOOR_Y - 6, (frand() - 0.5f) * 200, -150 - frand() * 250, 0.4f, 4, 900, 255, 230, 150, 1);
+        if (frame_no % 5 == 0) splat(boss.sweepx, FLOOR_Y + 2, 12, 1, 40, 26, 14);
         boss_hit_player_box(boss.sweepx, FLOOR_Y, 70, 52);
         if (boss.sweepx < ARENA_X - 60) { boss.state = BS_IDLE; boss.timer = 1.2f * angry; }
         break;
@@ -609,8 +741,19 @@ static void update_boss(void) {
         if (boss.timer <= 0) { boss.state = BS_IDLE; boss.timer = 1.2f; }
         break;
     case BS_DEAD:
-        boss.pose = 2;
-        if (frame_no % 4 == 0) { ink_burst(boss.x + (frand() - 0.5f) * 260, boss.y - frand() * 380, 8, 300); sfx("boom"); }
+        if (boss.pose >= 0) boss.pose = 2;
+        if (frame_no % 4 == 0) { ink_burst(boss.x + (frand() - 0.5f) * 260, boss.y - frand() * 380, 8, 300); sfx("boom");
+            blood_spurt(boss.x + (frand() - 0.5f) * 200, boss.y - frand() * 300, frand() < 0.5f ? -1 : 1, 10, 700);
+            gore_part(rand() % 8, boss.x + (frand() - 0.5f) * 200, boss.y - 100 - frand() * 250, 700, rand() & 1);
+            if (frame_no % 12 == 0) ring(boss.x + (frand() - 0.5f) * 200, boss.y - frand() * 300, 120, 255, 200, 120); }
+        if (!boss.summoned && boss.timer < 1.0f) {   /* final blow: he comes apart, mask and all */
+            boss.summoned = 1; shatter(&A.inky[2], boss.x, boss.y + 10, 0, 5, 5, 800, 1); boss.pose = -1;
+            for (int k = 0; k < 6; k++) gore_part(2, boss.x - 30, boss.y - 330, 800, 0);
+            for (int k = 0; k < 4; k++) gore_part(4, boss.x, boss.y - 200, 700, 1);
+            gore_part(3, boss.x - 20, boss.y - 320, 900, 1); gore_part(3, boss.x + 20, boss.y - 320, 900, 1);
+            blood_spurt(boss.x, boss.y - 250, -1, 60, 900); blood_spurt(boss.x, boss.y - 250, 1, 40, 800);
+            ring(boss.x, boss.y - 200, 300, 255, 220, 160); shake = 24; hitstop = 10;
+        }
         boss.y += 40 * DT;
         if (boss.timer <= 0 && scene == SC_PLAY) { scene = SC_CLEAR; scene_t = 0; music_play("mm_clear", 0); }
         break;
@@ -628,12 +771,22 @@ static void update_proj(void) {
         if (p->x < camx - 100 || p->x > camx + SCREEN_W + 100 || p->y > LH * TILE + 50) { p->alive = 0; continue; }
         int tx = (int)(p->x / TILE), ty = (int)(p->y / TILE);
         if (solid_at(tx, ty) && p->y > 0) {
-            if (p->type == P_NOTE && p->bounces > 0) { p->bounces--; p->vy = -650; p->y = ty * TILE - 1; sfx("boing"); continue; }
-            if (p->type == P_DRIP) ink_burst(p->x, p->y, 5, 120);
+            if (p->type == P_NOTE && p->bounces > 0) { p->bounces--; p->vy = -650; p->y = ty * TILE - 1; sfx("boing"); splat(p->x, ty * TILE, 14, 1, 12, 8, 12); continue; }
+            if (p->type == P_DRIP || p->type == P_NOTE) { ink_burst(p->x, p->y, 6, 140); splat(p->x, ty * TILE, 12, 1, 12, 8, 12); }
+            else if (p->type == P_RIVET) { spark_burst(p->x, p->y, 10, 255, 160, 60); smoke(p->x, p->y, 2, 90); ring(p->x, p->y, 40, 255, 170, 80); }
+            else if (p->type == P_NAIL) { spark_burst(p->x, p->y, 5, 255, 230, 160); splat(p->x, p->y, 3, 0, 40, 36, 34); }
+            else if (p->type == P_PLUNGER) { sfx("boing"); splat(p->x, p->y, 9, 0, 170, 30, 30); }
+            else if (p->type == P_FLAME) { embers(p->x, p->y, 2); if (rand() % 3 == 0) splat(p->x, p->y, 6, 0, 30, 20, 14); }
             else if (!p->enemy) spark_burst(p->x, p->y, 4, 255, 220, 150);
+            if (p->type == P_LIGHT) { spark_burst(p->x, p->y, 8, 255, 240, 170); splat(p->x, p->y, 8, 0, 40, 28, 16); }
             p->alive = 0; continue;
         }
-        if (p->type == P_FLAME && frame_no % 2 == 0) part(p->x, p->y, p->vx * 0.1f, -60, 0.2f, 10, -100, 140, 190, 255, 1);
+        /* trails */
+        if (p->type == P_FLAME) { if (frame_no % 2 == 0) part(p->x, p->y, p->vx * 0.1f, -60, 0.2f, 10, -100, 140, 190, 255, 1); if (rand() % 4 == 0) embers(p->x, p->y, 1); }
+        if (p->type == P_RIVET && frame_no % 2 == 0) part(p->x, p->y, 0, 0, 0.18f, 6, 0, 255, 120, 30, 1);
+        if (p->type == P_LIGHT && frame_no % 2 == 0) part(p->x, p->y, 0, 0, 0.25f, 9, 0, 255, 230, 150, 1);
+        if (p->type == P_NOTE && frame_no % 3 == 0) part_k(PK_BLOOD, p->x, p->y, 0, 0, 1.0f, 4, 900, 12, 8, 12, 0);
+        if (p->type == P_PLUNGER) p->r = 14;
         if (p->enemy) {
             for (int k = 0; k < 2; k++) { Player *q = &pl[k];
                 if (q->active && q->alive && !q->hidden && overlap(q->x, q->y, 40, q->crouch ? 76 : 118, p->x, p->y + p->r, p->r * 2, p->r * 2)) {
@@ -642,14 +795,23 @@ static void update_proj(void) {
             for (int j = 0; j < nen && p->alive; j++) { Enemy *e = &en[j]; if (!e->alive || j == p->last_hit) continue;
                 float w, h; enemy_box(e, &w, &h);
                 if (overlap(e->x, e->y, w, h, p->x, p->y + p->r, p->r * 2, p->r * 2)) {
-                    enemy_damage(e, p->dmg); spark_burst(p->x, p->y, 5, 255, 240, 200);
+                    if (p->type == P_FLAME) e->burn = 2.2f;                      /* set them on fire */
+                    if (p->type == P_RIVET) { ring(p->x, p->y, 50, 255, 170, 80); smoke(p->x, p->y, 2, 90); }
+                    if (p->type == P_PLUNGER) { e->stun = 0.6f; sfx("boing"); message("THWONK!", 0.5f); }
+                    enemy_damage(e, p->dmg); spark_burst(p->x, p->y, 7, 255, 240, 200);
                     if (p->type == P_FLAME) p->last_hit = j; else p->alive = 0; } }
             if (p->alive && boss.active && boss.state != BS_DEAD && boss.state != BS_INTRO &&
                 overlap(boss.x, boss.y + boss.bob - 40, 220, 360, p->x, p->y + p->r, p->r * 2, p->r * 2)) {
                 boss.hp -= p->dmg; boss.flash = 5; spark_burst(p->x, p->y, 6, 255, 240, 200);
+                if (rand() % 3 == 0) blood_spurt(p->x, p->y, p->vx > 0 ? -1 : 1, 4, 400);
                 if (p->type != P_FLAME) p->alive = 0; else p->life -= 0.1f;
                 if (frame_no % 6 == 0) sfx("hit");
-                if (boss.hp <= 0) { boss.state = BS_DEAD; boss.timer = 3.5f; score += 10000; message("UNCLE INKY TAKES A BOW!", 3.0f); shake = 16; sfx("roar2"); }
+                if (boss.hp <= 0) {   /* his band dies with him */
+                    for (int j = 0; j < nen; j++) if (en[j].alive && en[j].type < E_CRATE) { gore_enemy(&en[j]); en[j].alive = 0; }
+                    for (int j = 0; j < MAXP; j++) if (pr[j].enemy) pr[j].alive = 0;
+                    boss.pose = 2;
+                }
+                if (boss.hp <= 0) { boss.summoned = 0; boss.state = BS_DEAD; boss.timer = 3.5f; score += 10000; message("UNCLE INKY TAKES A BOW!", 3.0f); shake = 16; sfx("roar2"); hitstop = 18; }
                 else if (boss.hp < boss.maxhp / 2 && boss.hp + p->dmg >= boss.maxhp / 2) { sfx("angry"); message("HE'S STEAMED!", 1.5f); shake = 10; }
             }
         }
@@ -658,7 +820,44 @@ static void update_proj(void) {
         k->t += DT; k->vy += 1400 * DT; float vx = 0;
         move_box(&k->x, &k->y, &vx, &k->vy, 40, 40, 0); if (k->t > 14) k->alive = 0; }
     for (int i = 0; i < MAXPART; i++) { Part *q = &parts[i]; if (q->life <= 0) continue;
-        q->life -= DT; q->vy += q->grav * DT; q->x += q->vx * DT; q->y += q->vy * DT; }
+        q->life -= DT; q->vy += q->grav * DT; q->x += q->vx * DT; q->y += q->vy * DT; q->ang += q->vang * DT;
+        if (q->kind == PK_SMOKE) { q->size += 18 * DT; q->vx *= 0.98f; }
+        if (q->kind == PK_BLOOD || q->kind == PK_CASING || q->kind == PK_DEBRIS) {
+            int tx = (int)(q->x / TILE), ty = (int)(q->y / TILE);
+            int hit = solid_at(tx, ty) || map[ty < 0 ? 0 : ty >= LH ? LH - 1 : ty][tx < 0 ? 0 : tx >= LW ? LW - 1 : tx] == '~';
+            if (hit && q->y > 0) {
+                if (q->kind == PK_BLOOD) {   /* lands: leaves a stain on the floor or wall */
+                    int floor = q->vy > 0 && !solid_at(tx, (int)((q->y - 14) / TILE));
+                    splat(q->x, floor ? ty * TILE + 2 : q->y, q->size * 1.2f + 2, floor, q->r, q->g, q->b); q->life = 0;
+                } else {                     /* casings and splinters bounce and settle */
+                    q->y = ty * TILE - 1; q->vy *= -0.35f; q->vx *= 0.6f; q->vang *= 0.5f;
+                    if (fabsf(q->vy) < 60) { q->vy = 0; q->grav = 0; q->vx = 0; q->vang = 0; }
+                }
+            }
+        }
+    }
+    /* gibs */
+    for (int i = 0; i < MAXGIB; i++) { Gib *g = &gibs[i]; if (g->life <= 0) continue;
+        g->life -= DT; if (g->rest) continue;
+        g->vy += 1700 * DT; g->x += g->vx * DT; g->y += g->vy * DT; g->ang += g->vang * DT;
+        if (g->bleed && frame_no % 4 == 0) part_k(PK_BLOOD, g->x, g->y, (frand() - 0.5f) * 40, 0, 1.0f, 3 + frand() * 2, 1200, 140, 12, 16, 0);
+        int tx = (int)(g->x / TILE), ty = (int)((g->y + g->h * 0.3f) / TILE);
+        if (solid_at(tx, ty) && g->vy > 0) {
+            g->y = ty * TILE - g->h * 0.3f; g->vy *= -0.4f; g->vx *= 0.55f; g->vang *= 0.5f;
+            if (g->bleed) splat(g->x, ty * TILE + 2, 10, 1, 130, 10, 14);
+            if (fabsf(g->vy) < 80) { g->rest = 1; g->vang = 0; }
+        }
+        if (g->y > LH * TILE + 100) g->life = 0;
+    }
+    for (int i = 0; i < 16; i++) if (rings[i].life > 0) { rings[i].life -= DT; rings[i].r += (rings[i].max - rings[i].r) * 0.25f; }
+    /* burning enemies */
+    for (int i = 0; i < nen; i++) { Enemy *e = &en[i]; if (!e->alive || e->burn <= 0) continue;
+        float w, h; enemy_box(e, &w, &h);
+        e->burn -= DT; e->btick -= DT;
+        if (frame_no % 2 == 0) part(e->x + (frand() - 0.5f) * w, e->y - frand() * h, (frand() - 0.5f) * 40, -120, 0.35f, 9 + frand() * 6, -150, 255, 120 + rand() % 90, 30, 1);
+        if (frame_no % 6 == 0) { smoke(e->x, e->y - h, 1, 50); embers(e->x, e->y - h * 0.5f, 1); }
+        if (e->btick <= 0) { e->btick = 0.45f; enemy_damage(e, 1); }
+    }
 }
 
 /* ------------------------------------------------------------ security office (GamePad) actions */
@@ -730,6 +929,7 @@ void game_step(const Input pads[MAX_PADS], const int connected[MAX_PADS]) {
         if (scene == SC_CLEAR) update_proj();
         return;
     }
+    if (hitstop > 0) { hitstop--; return; }
     /* drop-in second runner */
     int p2pad = mode == 1 ? 2 : 1;
     if (!pl[1].active && connected[p2pad] && (pads[p2pad].pressed & B_START) && pl[0].active) {
@@ -829,15 +1029,15 @@ static void draw_sprite(Tex *t, float x, float feet, float scale, int face_right
 
 static void draw_enemy(Enemy *e, float ox, float oy) {
     float x = sx(e->x) + ox, y = e->y + oy;
-    int fr = ((int)(e->t * 4)) & 1; Uint8 fl = e->flash ? 200 : 0;
+    Uint8 fl = e->flash ? 200 : 0; Tex *et = enemy_tex(e);
     switch (e->type) {
     case E_USHER: {
-        draw_sprite(&A.usher[fr], x, y + 2, 1, e->face > 0, fl, 255, 0, 1);
+        draw_sprite(et, x, y + 2, 1, e->face > 0, fl, 255, sinf(e->t * 14) * (fabsf(e->vx) > 5 ? 3 : 0), 1);
         if (e->state == 1) draw_glow(&A.disc, x + e->face * 44, y - 98, 40 + (0.5f - e->timer) * 40, 255, 240, 170, 230);
         break; }
     case E_DOG: {
         float sq = e->state == 1 ? 1.0f - 0.06f * sinf(e->t * 40) : 1;
-        draw_sprite(&A.dog[e->state == 0 ? fr : 0], x, y + 2, 1, e->face > 0, fl, 255, 0, sq);
+        draw_sprite(et, x, y + 2, 1, e->face > 0, fl, 255, 0, sq);
         float lx = x + e->face * 50, ly = y - 76;
         if (e->state == 1) draw_glow(&A.disc, lx, ly, 20 + (0.9f - e->timer) * 50, 255, 250, 200, 255);
         if (e->state == 2) {
@@ -849,8 +1049,8 @@ static void draw_enemy(Enemy *e, float ox, float oy) {
         break; }
     case E_BLOB: case E_MINIBLOB: {
         float s = e->type == E_MINIBLOB ? 0.6f : 1.0f;
-        float squash = e->onground ? 1.0f + 0.08f * sinf(e->t * 8) : 1.15f;
-        draw_sprite(&A.blob[fr], x, y + 2, s, e->face > 0, fl, 255, 0, squash);
+        float squash = e->onground ? 1.0f + 0.05f * sinf(e->t * 8) : 1.0f;
+        draw_sprite(et, x, y + 2, s, e->face > 0, fl, 255, 0, squash);
         break; }
     case E_CRATE: case E_HATCRATE: {
         float w = 52, h = 46, bx = x - w / 2, by = y - h;
@@ -867,6 +1067,11 @@ static void draw_enemy(Enemy *e, float ox, float oy) {
         draw_bar(x - r, cy, x - r + 18, cy, 4, 255, 50, 40, 230); draw_bar(x + r - 18, cy, x + r, cy, 4, 255, 50, 40, 230);
         draw_bar(x, cy - r, x, cy - r + 18, 4, 255, 50, 40, 230); draw_bar(x, cy + r - 18, x, cy + r, 4, 255, 50, 40, 230);
     }
+    if (e->burn > 0 && et && et->tex) {   /* on fire: flickering orange glow over the body */
+        float w = et->w, h = et->h * (e->type == E_MINIBLOB ? 0.6f : 1.0f);
+        draw_glow(&A.disc, x, y - h * 0.5f, h * 0.7f, 255, 120, 30, (Uint8)(120 + 60 * sinf(frame_no * 0.7f)));
+        (void)w;
+    }
     if (e->stun > 0) for (int k = 0; k < 3; k++) { float a = frame_no * 0.15f + k * 2.1f; draw_ellipse(&A.disc, x + cosf(a) * 26, y - 140 + sinf(a) * 8, 5, 5, 255, 240, 140, 255); }
 }
 
@@ -880,10 +1085,10 @@ static void draw_player(Player *p, float ox, float oy) {
     if (p->inv > 0 && p->alive && ((int)(p->inv * 20)) % 2) return;
     int set = p->gear >= 3 ? 0 : p->gear == 2 ? 1 : 2;
     int fr = 0; float sy = 1;
-    if (!p->alive) fr = 4;
-    else if (!p->onground) fr = p->aim_dy < 0 ? (p->aim_dx ? 5 : 6) : 4;
-    else if (p->aim_dy < 0) fr = p->aim_dx ? 5 : 6;
-    else if (fabsf(p->vx) > 20) fr = (p->shoot_t > 0) ? ((int)(p->anim * 6) % 2 ? 1 : 0) : (((int)(p->anim * 6)) % 2 ? 3 : 2);
+    if (!p->alive) fr = 5;
+    else if (!p->onground) fr = p->aim_dy < 0 ? (p->aim_dx ? 6 : 7) : 5;
+    else if (p->aim_dy < 0) fr = p->aim_dx ? 6 : 7;
+    else if (fabsf(p->vx) > 20) fr = 1 + ((int)(p->anim * 8)) % 4;
     else fr = 0;
     if (p->crouch) sy = 0.68f;
     else if (p->onground && fabsf(p->vx) < 20) sy = 1.0f + 0.015f * sinf(p->bob * 4);
@@ -930,9 +1135,29 @@ static void draw_proj(float ox, float oy) {
     }
 }
 
+static void draw_splats(float ox, float oy) {
+    for (int i = 0; i < MAXSPLAT; i++) { Splat *d = &splats[i]; if (d->a == 0) continue;
+        float x = sx(d->x) + ox, y = d->y + oy; if (x < -120 || x > SCREEN_W + 120) continue;
+        if (d->tex >= 0) draw_tex_srcx(&A.gore[d->tex], NULL, x - d->rx, y - d->ry, d->rx * 2, d->ry * 2, i & 1, d->ang, d->r > 60 ? 255 : 90, d->r > 60 ? 255 : 80, d->r > 60 ? 255 : 90, d->a);
+        else draw_ellipse(&A.disc, x, y, d->rx, d->ry, d->r, d->g, d->b, d->a);
+    }
+}
+static void draw_gibs(float ox, float oy) {
+    for (int i = 0; i < MAXGIB; i++) { Gib *g = &gibs[i]; if (g->life <= 0) continue;
+        Uint8 a = (Uint8)(255 * fminf(1, g->life));
+        draw_tex_srcx(g->t, &g->src, sx(g->x) + ox - g->w / 2, g->y + oy - g->h / 2, g->w, g->h, g->flip, g->ang, 255, 255, 255, a);
+    }
+}
 static void draw_parts(float ox, float oy) {
+    for (int i = 0; i < 16; i++) { Ring *r = &rings[i]; if (r->life <= 0) continue;
+        float k = r->life / 0.45f, x = sx(r->x) + ox, y = r->y + oy;
+        for (int a = 0; a < 28; a++) { float t = a * 6.2832f / 28; draw_ellipse(&A.disc, x + cosf(t) * r->r, y + sinf(t) * r->r * 0.45f, 6 * k + 2, 6 * k + 2, r->cr, r->cg, r->cb, (Uint8)(220 * k)); }
+    }
     for (int i = 0; i < MAXPART; i++) { Part *q = &parts[i]; if (q->life <= 0) continue;
         float k = q->life / q->max, s = q->size * (0.5f + 0.5f * k);
+        if (q->kind == PK_SMOKE) { draw_ellipse(&A.disc, sx(q->x) + ox, q->y + oy, q->size, q->size, q->r, q->g, q->b, (Uint8)(110 * k)); continue; }
+        if (q->kind == PK_CASING) { float a = q->ang * 0.01745f; draw_bar(sx(q->x) + ox - cosf(a) * 5, q->y + oy - sinf(a) * 5, sx(q->x) + ox + cosf(a) * 5, q->y + oy + sinf(a) * 5, 4, q->r, q->g, q->b, (Uint8)(255 * fminf(1, k * 3))); continue; }
+        if (q->kind == PK_DEBRIS) { float a = q->ang * 0.01745f, L = q->size; draw_bar(sx(q->x) + ox - cosf(a) * L, q->y + oy - sinf(a) * L, sx(q->x) + ox + cosf(a) * L, q->y + oy + sinf(a) * L, L * 0.5f, q->r, q->g, q->b, (Uint8)(255 * fminf(1, k * 3))); continue; }
         if (q->add) draw_glow(&A.disc, sx(q->x) + ox, q->y + oy, s * 2.5f, q->r, q->g, q->b, (Uint8)(255 * k));
         else draw_ellipse(&A.disc, sx(q->x) + ox, q->y + oy, s, s, q->r, q->g, q->b, (Uint8)(255 * fminf(1, k * 2))); }
 }
@@ -970,6 +1195,7 @@ static void draw_boss(float ox, float oy) {
         draw_ellipse(&A.disc, bx, FLOOR_Y + oy - 26, 50, 26, 255, 250, 210, 220);
         draw_glow(&A.disc, bx, FLOOR_Y + oy - 26, 90, 255, 230, 150, 255);
     }
+    if (boss.pose < 0) return;
     Tex *t = &A.inky[boss.pose];
     double ang = boss.state == BS_DEAD ? sinf(frame_no * 0.5f) * 6 : sinf(boss.t * 1.3f) * 2;
     draw_sprite(t, x, y + 10, 1, 0, boss.flash ? 170 : 0, 255, ang, 1.0f + 0.02f * sinf(boss.t * 4));
@@ -1100,8 +1326,10 @@ void game_draw(void) {
     draw_bg(ox);
     draw_boss(ox, oy);
     draw_tiles(ox, oy);
+    draw_splats(ox, oy);
     for (int i = 0; i < nen; i++) if (en[i].alive) { float x = sx(en[i].x); if (x > -200 && x < SCREEN_W + 200) draw_enemy(&en[i], ox, oy); }
     for (int i = 0; i < 2; i++) draw_player(&pl[i], ox, oy);
+    draw_gibs(ox, oy);
     draw_fiend(ox, oy);
     draw_proj(ox, oy);
     draw_parts(ox, oy);

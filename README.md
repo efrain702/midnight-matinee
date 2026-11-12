@@ -67,3 +67,11 @@ Drop the .ogg files into `engine/content/music` with these names; any that are m
 | `mm_gameover` | game over | sad organ winding down like a dying machine |
 
 All eight tracks were generated in Runway around one shared D-minor organ theme, with LOOPSTART tags so loops skip the intros.
+
+## Gore and effects
+Enemies bleed oil-blood on every hit and come apart when they die: the sprite is chopped into chunks, plus painted
+body parts (porcelain shards, eyeballs on wires, leaking gloves, gears, springs, lens glass) that bounce and
+leave stains. Blood and ink stay splattered on the floor and walls. The welding torch sets enemies on fire, rivets
+burst, nails spark, casings fly, big hits freeze the action for a few frames, and Uncle Inky's slams send out
+shockwaves and splinters. When he dies he blows apart in stages, then shatters, mask and all.
+Test switches: `MM_WEAPON=0..3` (starting weapon), `MM_BOSS_HP=n` (boss starting health).

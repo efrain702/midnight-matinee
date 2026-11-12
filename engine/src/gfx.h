@@ -46,4 +46,5 @@ void draw_glow(Tex *disc, float cx, float cy, float rad, Uint8 r, Uint8 g, Uint8
 void draw_bar(float x0, float y0, float x1, float y1, float thick, Uint8 r, Uint8 g, Uint8 b, Uint8 a); /* rotated thick line */
 void draw_tex_tint(Tex *t, float x, float y, float w, float h, int flip, Uint8 r, Uint8 g, Uint8 b, Uint8 a, double angle);
 void draw_text_col(Font *f, const char *s, float x, float y, float scale, int centered, Uint8 r, Uint8 g, Uint8 b, Uint8 a);
+void draw_tex_srcx(Tex *t, const SDL_Rect *src, float x, float y, float w, float h, int flip, double angle, Uint8 r, Uint8 g, Uint8 b, Uint8 a);
 #endif

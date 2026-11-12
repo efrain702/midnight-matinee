@@ -268,3 +268,11 @@ void draw_text_col(Font *f, const char *s, float x, float y, float scale, int ce
     draw_text(f, s, x, y, scale, centered, a);
     SDL_SetTextureColorMod(f->tex.tex, 255, 255, 255);
 }
+
+void draw_tex_srcx(Tex *t, const SDL_Rect *src, float x, float y, float w, float h, int flip, double angle, Uint8 r, Uint8 g, Uint8 b, Uint8 a) {
+    if (!t || !t->tex) return;
+    SDL_FRect d = {x, y, w, h};
+    SDL_SetTextureColorMod(t->tex, r, g, b); SDL_SetTextureAlphaMod(t->tex, a);
+    SDL_RenderCopyExF(R, t->tex, src, &d, angle, NULL, flip ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
+    SDL_SetTextureColorMod(t->tex, 255, 255, 255); SDL_SetTextureAlphaMod(t->tex, 255);
+}

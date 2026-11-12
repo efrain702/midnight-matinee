@@ -96,3 +96,31 @@ if __name__ == '__main__':
     os.makedirs(os.path.join(OUT, 'bg'), exist_ok=True)
     bg.save(os.path.join(OUT, 'bg', 'theater.jpg'), quality=88)
     print('bg', bg.size)
+
+def cut_set(sheet, name, ref_height, y0=0.0, y1=1.0, expect=None, ref_index=0, flip=False, order=None, gap=6):
+    """Consistent frames: every frame gets the SAME scale, taken from frame ref_index."""
+    im = Image.open(os.path.join(REF, sheet)); W, H = im.size
+    rgba = key(im.crop((0, int(H * y0), W, int(H * y1))))
+    runs = split(rgba, gap=gap)
+    if expect and len(runs) != expect: print('  warning', name, 'found', len(runs), 'expected', expect)
+    frames = [trim(biggest_blob_only(rgba[:, a:b])) for a, b in runs]
+    s = ref_height / frames[ref_index].shape[0]
+    if order: frames = [frames[i] for i in order]
+    for i, f in enumerate(frames):
+        img = Image.fromarray(f, 'RGBA').resize((max(1, int(f.shape[1] * s)), max(1, int(f.shape[0] * s))), Image.LANCZOS)
+        if flip: img = img.transpose(Image.FLIP_LEFT_RIGHT)
+        img.save(os.path.join(OUT, 'chars', f'{name}_{i}.png'))
+    print(name, len(frames), 'frames, scale', round(s, 3))
+    return len(frames)
+
+def cut_grid_items(sheet, name, rows, height):
+    """Loose items (gore) laid out in rows: each saved on its own, scaled so the tallest is `height`."""
+    im = Image.open(os.path.join(REF, sheet)); W, H = im.size
+    n = 0
+    for r in range(rows):
+        rgba = key(im.crop((0, int(H * r / rows), W, int(H * (r + 1) / rows))))
+        for a, b in split(rgba, gap=10):
+            f = trim(rgba[:, a:b]); img = Image.fromarray(f, 'RGBA')
+            s = height / max(img.width, img.height)
+            img.resize((max(1, int(img.width * s)), max(1, int(img.height * s))), Image.LANCZOS).save(os.path.join(OUT, 'chars', f'{name}_{n}.png')); n += 1
+    print(name, n, 'items')
