@@ -24,13 +24,13 @@ static float signf(float v) { return v < 0 ? -1.0f : 1.0f; }
 
 /* ------------------------------------------------------------ assets */
 #define HERO_FRAMES 8
-typedef struct { Tex hero[3][HERO_FRAMES]; Tex usher[5], dog[5], blob[4], inky[3], gore[12], goat[5], meat[5], slice[5], rat[5], cleaver, gore2[12], bg2, bomb[5], ghost[5], glove[5], splicer[3], bg3, imp[5], worker[5], eel[5], press[3], bg4; Tex bg, disc, vignette, mask, grain[4]; Font font, small; } Assets;
+typedef struct { Tex hero[3][HERO_FRAMES]; Tex usher[5], dog[5], blob[4], inky[3], gore[12], goat[5], meat[5], slice[5], rat[5], cleaver, gore2[12], bg2, bomb[5], ghost[5], glove[5], splicer[3], bg3, imp[5], worker[5], eel[5], press[3], bg4, suitcase[5], soldier[5], umbrella[5], collector[3], bg5; Tex bg, disc, vignette, mask, grain[4]; Font font, small; } Assets;
 static Assets A;
 static Font padFont, padSmall; static Tex padDisc;
 
 /* ------------------------------------------------------------ level */
 static char map[LH][LW + 1];
-enum { E_USHER, E_DOG, E_BLOB, E_MINIBLOB, E_GOAT, E_MEATBALL, E_SLICE, E_BOMB, E_GHOST, E_GLOVE, E_IMP, E_WORKER, E_EEL, E_CRATE, E_HATCRATE };
+enum { E_USHER, E_DOG, E_BLOB, E_MINIBLOB, E_GOAT, E_MEATBALL, E_SLICE, E_BOMB, E_GHOST, E_GLOVE, E_IMP, E_WORKER, E_EEL, E_SUITCASE, E_SOLDIER, E_UMBRELLA, E_CRATE, E_HATCRATE };
 typedef struct { int type, alive, hp, face, state, flash, onground; float x, y, vx, vy, t, timer, marked, stun, plat0, plat1, burn, btick, land; } Enemy;
 #define MAXE 96
 static Enemy en[MAXE]; static int nen;
@@ -58,8 +58,11 @@ static const LevelDef LEVELS[] = {
     {"THE INK WORKS", "WHERE THE INK IS MADE", "THE BIG PRESS", "IT PRINTS NOTHING BUT TROUBLE", "mm_boss4",
      {"LOADING BAY", "PRESS FLOOR", "INK VATS", "PIPE WORKS", "BOILER FURNACE", "THE PRESS ROOM"}, {0, 40, 85, 125, 170, 210, LW},
      {"mm_level4", "mm_level4", "mm_level4", "mm_pipes", "mm_pipes", "mm_level4"}},
+    {"LOST & FOUND", "EVERYTHING THE THEATRE EVER LOST", "THE COLLECTOR", "FINDERS KEEPERS", "mm_boss5",
+     {"COAT CHECK", "LOST PROPERTY", "TOY CHEST", "LUGGAGE HALL", "DOLL HOSPITAL", "THE CLAIM DESK"}, {0, 40, 85, 125, 170, 210, LW},
+     {"mm_level5", "mm_level5", "mm_level5", "mm_dolls", "mm_dolls", "mm_level5"}},
 };
-#define NUM_LEVELS 4
+#define NUM_LEVELS 5
 static int level_no;
 static const char *const *ZONE_NAME = LEVELS[0].zone;
 static const int *ZONE_X0 = LEVELS[0].x0;
@@ -76,9 +79,10 @@ static void spawn(int type, int tx, int row) {
     e->hp = type == E_USHER ? 3 : type == E_DOG ? 4 : type == E_BLOB ? 2 : type == E_MINIBLOB ? 1 :
             type == E_GOAT ? 4 : type == E_MEATBALL ? 3 : type == E_SLICE ? 2 :
             type == E_BOMB ? 2 : type == E_GHOST ? 3 : type == E_GLOVE ? 3 :
-            type == E_IMP ? 2 : type == E_WORKER ? 5 : type == E_EEL ? 3 : 1;
-    if (type == E_SLICE) { e->plat0 = e->y - 30; e->timer = frand() * 3; }   /* plat0 = home altitude */
+            type == E_IMP ? 2 : type == E_WORKER ? 5 : type == E_EEL ? 3 :
+            type == E_SUITCASE ? 4 : type == E_SOLDIER ? 3 : type == E_UMBRELLA ? 2 : 1;
     e->timer = 1.0f + frand(); e->plat0 = 0; e->plat1 = LW * TILE;
+    if (type == E_SLICE || type == E_UMBRELLA) { e->plat0 = e->y - 30; e->timer = frand() * 3; }   /* plat0 = home altitude */
     if (type == E_GHOST) e->land = frand() * 4;   /* phase offset for fading */
     if (type == E_EEL) { e->y = FLOOR_Y; e->timer = 0.5f + frand(); }
 }
@@ -91,9 +95,10 @@ static void build_level1(void);
 static void build_level2(void);
 static void build_level3(void);
 static void build_level4(void);
+static void build_level5(void);
 static void build_level(void) {
     ZONE_NAME = LEVELS[level_no].zone; ZONE_X0 = LEVELS[level_no].x0;
-    if (level_no == 3) build_level4(); else if (level_no == 2) build_level3(); else if (level_no == 1) build_level2(); else build_level1();
+    if (level_no == 4) build_level5(); else if (level_no == 3) build_level4(); else if (level_no == 2) build_level3(); else if (level_no == 1) build_level2(); else build_level1();
 }
 static void build_level1(void) {
     for (int y = 0; y < LH; y++) { memset(map[y], '.', LW); map[y][LW] = 0; }
@@ -260,10 +265,47 @@ static void build_level4(void) {
     checkpoint(209);
     for (int i = 0; i < nen; i++) en[i].plat1 = LW * TILE;
 }
+/* SHOW 5: LOST & FOUND. 'U' toy-block platforms crumble after you land, 'M' giant mousetraps snap */
+static float crumble_t[LH][LW], regrow_t[LH][LW], trap_t[LW];
+static void blocks(int x0, int x1, int y) { for (int x = x0; x <= x1; x++) put(x, y, 'U'); }
+static void mousetrap(int tx) { put(tx, 12, 'M'); }
+static void build_level5(void) {
+    for (int y = 0; y < LH; y++) { memset(map[y], '.', LW); map[y][LW] = 0; }
+    memset(crumble_t, 0, sizeof crumble_t); memset(regrow_t, 0, sizeof regrow_t); memset(trap_t, 0, sizeof trap_t);
+    nen = nbreak = ndrip = ncheck = 0;
+    block(0, LW - 1, 13, 14);
+    block(0, 0, 0, 12); block(LW - 1, LW - 1, 0, 12);
+    /* COAT CHECK: suitcases hop, umbrellas swoop */
+    checkpoint(2);
+    spawn(E_SUITCASE, 14, 13); plat(17, 22, 10); spawn(E_CRATE, 20, 10); spawn(E_UMBRELLA, 24, 7);
+    mousetrap(27); spawn(E_SOLDIER, 32, 13); breaker(30);
+    /* LOST PROPERTY: shelves to climb, soldiers below */
+    checkpoint(41);
+    block(46, 48, 11, 12); spawn(E_SOLDIER, 52, 13); spawn(E_SOLDIER, 55, 13); mousetrap(58); plat(57, 63, 9); spawn(E_UMBRELLA, 60, 6);
+    spawn(E_SUITCASE, 67, 13); block(70, 72, 12, 12); mousetrap(75); plat(78, 83, 9); spawn(E_HATCRATE, 81, 9);
+    /* TOY CHEST: toy-block bridges that crumble under you */
+    checkpoint(86);
+    pit(91, 96); blocks(90, 97, 10); spawn(E_UMBRELLA, 94, 6); spawn(E_SUITCASE, 100, 13);
+    pit(104, 110); blocks(103, 106, 10); blocks(108, 111, 9); spawn(E_UMBRELLA, 107, 5);
+    spawn(E_SOLDIER, 115, 13); mousetrap(118); breaker(122);
+    /* LUGGAGE HALL: towers of trunks, suitcases leaping off them */
+    checkpoint(126);
+    block(130, 132, 11, 12); spawn(E_SUITCASE, 131, 11); block(135, 138, 9, 12); spawn(E_SOLDIER, 136, 9); mousetrap(140);
+    block(142, 144, 11, 12); spawn(E_SUITCASE, 143, 11); spawn(E_UMBRELLA, 148, 6); blocks(150, 155, 9); pit(150, 155);
+    spawn(E_SOLDIER, 159, 13); spawn(E_CRATE, 162, 13); mousetrap(164); breaker(167);
+    /* DOLL HOSPITAL: crumbling blocks over an ink drain, umbrellas everywhere */
+    checkpoint(171);
+    pit(175, 196); blocks(175, 178, 10); blocks(181, 184, 9); blocks(187, 190, 10); blocks(193, 197, 9);
+    spawn(E_UMBRELLA, 180, 5); spawn(E_UMBRELLA, 189, 5); spawn(E_UMBRELLA, 196, 6);
+    spawn(E_SUITCASE, 201, 13); spawn(E_SOLDIER, 206, 13); breaker(203);
+    /* THE CLAIM DESK (boss) */
+    checkpoint(209);
+    for (int i = 0; i < nen; i++) en[i].plat1 = LW * TILE;
+}
 static float film_phase(int tx);
 static int film_on(int tx) { return film_phase(tx) < 2.1f; }
 static int solid_at(int tx, int ty) { if (tx < 0 || tx >= LW) return 1; if (ty < 0 || ty >= LH) return 0; char c = map[ty][tx]; return c == '#' || c == 'O' || c == '>' || c == '<'; }
-static int oneway_at(int tx, int ty) { if (tx < 0 || tx >= LW || ty < 0 || ty >= LH) return 0; char c = map[ty][tx]; return c == '=' || (c == 'F' && film_on(tx)); }
+static int oneway_at(int tx, int ty) { if (tx < 0 || tx >= LW || ty < 0 || ty >= LH) return 0; char c = map[ty][tx]; return c == '=' || c == 'U' || (c == 'F' && film_on(tx)); }
 
 static int move_box(float *x, float *y, float *vx, float *vy, float w, float h, int drop);
 /* standing on a conveyor belt: it carries you along */
@@ -311,7 +353,7 @@ static int op_pad;          /* who runs the cameras */
 static int score;
 
 /* projectiles */
-enum { P_NAIL, P_RIVET, P_FLAME, P_PLUNGER, P_LIGHT, P_NOTE, P_TICKET, P_DRIP, P_CONFETTI, P_PIZZA, P_CHEESE, P_FILM, P_REEL, P_INKBLOB, P_SHEET };
+enum { P_NAIL, P_RIVET, P_FLAME, P_PLUNGER, P_LIGHT, P_NOTE, P_TICKET, P_DRIP, P_CONFETTI, P_PIZZA, P_CHEESE, P_FILM, P_REEL, P_INKBLOB, P_SHEET, P_CORK, P_SHOE };
 typedef struct { int type, alive, enemy, dmg, bounces, last_hit; float x, y, vx, vy, life, grav, r; } Proj;
 #define MAXP 160
 static Proj pr[MAXP];
@@ -529,6 +571,13 @@ void game_init(void) {
         snprintf(rel, sizeof rel, "chars/eel_%d.png", i); A.eel[i] = load_or_empty(rel); if (!A.eel[i].tex && i) A.eel[i] = A.eel[0];
     }
     for (int i = 0; i < 3; i++) { snprintf(rel, sizeof rel, "chars/press_%d.png", i); A.press[i] = load_or_empty(rel); }
+    A.bg5 = load_or_empty("bg/lostfound.jpg");
+    for (int i = 0; i < 5; i++) {
+        snprintf(rel, sizeof rel, "chars/suitcase_%d.png", i); A.suitcase[i] = load_or_empty(rel); if (!A.suitcase[i].tex && i) A.suitcase[i] = A.suitcase[0];
+        snprintf(rel, sizeof rel, "chars/soldier_%d.png", i); A.soldier[i] = load_or_empty(rel); if (!A.soldier[i].tex && i) A.soldier[i] = A.soldier[0];
+        snprintf(rel, sizeof rel, "chars/umbrella_%d.png", i); A.umbrella[i] = load_or_empty(rel); if (!A.umbrella[i].tex && i) A.umbrella[i] = A.umbrella[0];
+    }
+    for (int i = 0; i < 3; i++) { snprintf(rel, sizeof rel, "chars/collector_%d.png", i); A.collector[i] = load_or_empty(rel); }
     for (int i = 0; i < 3; i++) { snprintf(rel, sizeof rel, "chars/inky_%d.png", i); A.inky[i] = load_or_empty(rel); }
     A.bg = load_or_empty("bg/theater.jpg");
     for (int i = 0; i < 4; i++) { snprintf(rel, sizeof rel, "ui/grain%d.png", i); A.grain[i] = load_or_empty(rel); }
@@ -548,6 +597,14 @@ void game_goto(const char *name) {
         if (!strcmp(name, "boss2")) { cur_check = ncheck - 1; reset_player(&pl[0], 0); }
         if (!strcmp(name, "kitchen")) { cur_check = 3; reset_player(&pl[0], 0); }
         if (!strcmp(name, "dock")) { cur_check = 4; reset_player(&pl[0], 0); }
+        return;
+    }
+    if (!strcmp(name, "level5") || !strcmp(name, "boss5") || !strcmp(name, "toys") || !strcmp(name, "luggage") || !strcmp(name, "dolls")) {
+        level_no = 4; start_level();
+        if (!strcmp(name, "boss5")) { cur_check = ncheck - 1; reset_player(&pl[0], 0); }
+        if (!strcmp(name, "toys")) { cur_check = 2; reset_player(&pl[0], 0); }
+        if (!strcmp(name, "luggage")) { cur_check = 3; reset_player(&pl[0], 0); }
+        if (!strcmp(name, "dolls")) { cur_check = 4; reset_player(&pl[0], 0); }
         return;
     }
     if (!strcmp(name, "level4") || !strcmp(name, "boss4") || !strcmp(name, "vats") || !strcmp(name, "pipes") || !strcmp(name, "furnace")) {
@@ -703,6 +760,9 @@ static void enemy_box(Enemy *e, float *w, float *h) {
     case E_GHOST: *w = 76; *h = 104; break;
     case E_GLOVE: *w = 90; *h = 66; break;
     case E_IMP: *w = 60; *h = 84; break;
+    case E_SUITCASE: *w = 84; *h = 74; break;
+    case E_SOLDIER: *w = 56; *h = 140; break;
+    case E_UMBRELLA: *w = 84; *h = 56; break;
     case E_WORKER: *w = 70; *h = 140; break;
     case E_EEL: *w = 60; *h = (e->state == 1 ? 80 : e->state == 2 ? 150 : 20); break;
     default: *w = 56; *h = 48; break;
@@ -731,6 +791,9 @@ static Tex *enemy_tex(Enemy *e) {
     case E_BOMB: return &A.bomb[e->state == 1 ? 4 : !e->onground ? 2 : e->land > 0 ? 3 : e->timer < 0.2f ? 1 : 0];
     case E_GHOST: return &A.ghost[e->state == 1 ? 4 : ghost_faded(e) ? 3 : ((int)(e->t * 3)) % 2];
     case E_GLOVE: return &A.glove[e->state == 0 ? ((int)(e->t * 8)) % 2 : e->state == 1 ? 2 : e->state == 2 ? 3 : 4];
+    case E_SUITCASE: return &A.suitcase[e->flash > 3 ? 4 : !e->onground ? 2 : e->land > 0 ? 3 : e->timer < 0.25f ? 1 : 0];
+    case E_SOLDIER: return &A.soldier[e->flash > 3 ? 4 : e->state == 1 ? (e->timer > 0.15f ? 2 : 3) : (fabsf(e->vx) > 5 ? ((int)(e->t * 6)) % 2 : 0)];
+    case E_UMBRELLA: return &A.umbrella[e->flash > 3 ? 4 : e->state == 1 ? 3 : ((int)(e->t * 8)) % 3];
     case E_IMP: return &A.imp[e->flash ? 4 : e->state == 1 ? (e->timer > 0.2f ? 2 : 3) : (fabsf(e->vx) > 5 ? ((int)(e->t * 7)) % 2 : 0)];
     case E_WORKER: return &A.worker[e->flash > 3 ? 4 : e->state == 1 ? 2 : e->state == 2 ? 3 : (fabsf(e->vx) > 5 ? ((int)(e->t * 7)) % 2 : 0)];
     case E_EEL: return &A.eel[e->state == 1 ? (e->timer > 0.2f ? 0 : 1) : e->state == 2 ? (e->timer < 0.6f && e->timer > 0.25f ? 3 : 2) : 4];
@@ -789,6 +852,21 @@ static void gore_enemy(Enemy *e) {
         sfx("splat"); if (t) shatter(t, e->x, e->y, e->face > 0, 3, 3, 420, 1);
         gore_part(11, cx, cy, 480, 1); gore_part(11, cx, cy, 440, 1); gore_part(3, cx, cy, 520, 1);
         blood_spurt(cx, cy, -e->face, 34, 600); blood_spurt(cx, cy, e->face, 18, 480);
+        break;
+    case E_SUITCASE: /* bursts open: clothes, papers, a toothy lid */
+        sfx("splat"); if (t) shatter(t, e->x, e->y, e->face > 0, 3, 3, 440, 1);
+        for (int i = 0; i < 16; i++) part_k(PK_DEBRIS, cx, cy, (frand() - 0.5f) * 700, -200 - frand() * 500, 2.0f, 6 + frand() * 8, 1500, 200 + rand() % 50, 190 + rand() % 50, 160, 0);
+        blood_spurt(cx, cy, -e->face, 30, 560); gore_part(3, cx, cy, 520, 1);
+        break;
+    case E_SOLDIER: /* splinters: wooden limbs, a bearskin hat, springs */
+        sfx("clank"); if (t) shatter(t, e->x, e->y, e->face > 0, 3, 4, 460, 1);
+        for (int i = 0; i < 12; i++) part_k(PK_DEBRIS, cx, cy - 20, (frand() - 0.5f) * 600, -200 - frand() * 500, 2.0f, 6 + frand() * 8, 1500, 150, 100, 55, 0);
+        gore_part(5, cx, cy, 520, 0); blood_spurt(cx, cy - 40, -e->face, 22, 520);
+        break;
+    case E_UMBRELLA: /* shredded canopy and a snapped handle */
+        sfx("splat"); if (t) shatter(t, e->x, e->y, e->face > 0, 3, 2, 380, 1);
+        for (int i = 0; i < 14; i++) part(cx, cy, (frand() - 0.5f) * 600, -150 - frand() * 350, 1.2f, 6, 800, 20, 18, 22, 0);
+        blood_spurt(cx, cy, -e->face, 16, 460);
         break;
     case E_IMP:     /* the inkwell shatters: glass and a big ink splash */
         sfx("shatter"); if (t) shatter(t, e->x, e->y, e->face > 0, 3, 3, 420, 0);
@@ -858,7 +936,7 @@ static void update_enemies(void) {
         float w, h; enemy_box(e, &w, &h);
         float dist; Player *t = nearest_player(e->x, e->y, &dist);
         e->t += DT * speed_k;
-        if (e->type == E_SLICE) {   /* flies: bob around home, then dive-bomb */
+        if (e->type == E_SLICE || e->type == E_UMBRELLA) {   /* flies: bob around home, then dive-bomb */
             if (e->state == 0) {
                 e->face = t && t->x < e->x ? -1 : 1;
                 float hx = t ? t->x - e->face * 220 : e->x;
@@ -985,6 +1063,25 @@ static void update_enemies(void) {
                 if (e->timer <= 0) { e->alive = 0; score += 50; gore_enemy(e); continue; }
             }
             break;
+        case E_SUITCASE:   /* big chomping hops toward you */
+            e->timer -= DT * speed_k;
+            if (e->onground) { e->vx *= 0.8f; if (e->timer <= 0 && t && dist < 820) {
+                e->face = t->x < e->x ? -1 : 1; e->vx = e->face * 240; e->vy = -620; e->timer = 0.9f + frand() * 0.5f; sfx("boing"); } }
+            break;
+        case E_SOLDIER:   /* marches in, kneels and fires corks low along the floor: jump them */
+            if (t && dist < 800) e->face = t->x < e->x ? -1 : 1;
+            if (e->state == 0) {
+                e->vx = (t && dist < 800 && fabsf(t->x - e->x) > 280) ? e->face * 80 * speed_k : 0;
+                e->timer -= DT * speed_k;
+                if (e->timer <= 0 && t && dist < 700 && fabsf(t->y - e->y) < 100) { e->state = 1; e->timer = 0.5f; e->vx = 0; }
+            } else {
+                e->timer -= DT * speed_k;
+                if (e->timer <= 0) {
+                    Proj *q = proj(P_CORK, e->x + e->face * 46, e->y - 34, e->face * 400, 0, 1, 1); if (q) q->r = 10;
+                    smoke(e->x + e->face * 50, e->y - 36, 2, 220); sfx("throw"); e->state = 0; e->timer = 1.8f + frand();
+                }
+            }
+            break;
         case E_IMP:   /* waddles near, then lobs a blob of ink */
             if (t && dist < 760) e->face = t->x < e->x ? -1 : 1;
             if (e->state == 0) {
@@ -1035,7 +1132,7 @@ static void update_enemies(void) {
         int was_ground = e->onground;
         int r = move_box(&e->x, &e->y, &e->vx, &e->vy, w, h, 0);
         e->onground = (r & 1) != 0;
-        if (!was_ground && e->onground && e->type == E_BOMB) e->land = 0.15f;
+        if (!was_ground && e->onground && (e->type == E_BOMB || e->type == E_SUITCASE)) { e->land = 0.15f; if (e->type == E_SUITCASE) sfx("slam"); }
         if (!was_ground && e->onground && (e->type == E_BLOB || e->type == E_MINIBLOB)) { e->land = 0.18f; part_k(PK_BLOOD, e->x, e->y - 6, -80, -120, 0.6f, 4, 1200, 12, 8, 12, 0); part_k(PK_BLOOD, e->x, e->y - 6, 80, -120, 0.6f, 4, 1200, 12, 8, 12, 0); }
         if (e->land > 0) e->land -= DT;
         if ((r & 2) && (e->type == E_DOG || e->type == E_MEATBALL)) e->vx = -e->vx * 0.8f;
@@ -1110,6 +1207,32 @@ static void update_crushers_vents(void) {
         }
     }
 }
+/* toy blocks crumble a moment after you land on them, then stack themselves back up; mousetraps snap */
+static void update_blocks_traps(void) {
+    if (level_no != 4) return;
+    for (int k = 0; k < 2; k++) { Player *p = &pl[k]; if (!p->active || !p->alive || !p->onground) continue;
+        int ty = (int)((p->y + 2) / TILE);
+        for (int dx = -1; dx <= 1; dx++) { int tx = (int)((p->x + dx * 16) / TILE);
+            if (tx >= 0 && tx < LW && ty >= 0 && ty < LH && map[ty][tx] == 'U' && crumble_t[ty][tx] == 0) { crumble_t[ty][tx] = 0.01f; sfx("tick"); } } }
+    int t0 = (int)(camx / TILE) - 4, t1 = t0 + SCREEN_W / TILE + 8;
+    for (int ty = 0; ty < LH; ty++) for (int tx = t0; tx <= t1; tx++) { if (tx < 0 || tx >= LW) continue;
+        if (map[ty][tx] == 'U' && crumble_t[ty][tx] > 0) { crumble_t[ty][tx] += DT;
+            if (crumble_t[ty][tx] > 0.55f) { map[ty][tx] = 'u'; crumble_t[ty][tx] = 0; regrow_t[ty][tx] = 4.0f; sfx("poof");
+                for (int i = 0; i < 4; i++) part_k(PK_DEBRIS, tx * TILE + 24, ty * TILE + 10, (frand() - 0.5f) * 300, -100 - frand() * 200, 2.0f, 10 + frand() * 6, 1600, 180 + rand() % 60, 60 + rand() % 120, 50 + rand() % 80, 0); } }
+        else if (map[ty][tx] == 'u') { regrow_t[ty][tx] -= DT;
+            int blocked = 0; for (int k = 0; k < 2; k++) if (pl[k].active && fabsf(pl[k].x - (tx * TILE + 24)) < 40 && fabsf(pl[k].y - ty * TILE) < 60) blocked = 1;
+            if (regrow_t[ty][tx] <= 0 && !blocked) { map[ty][tx] = 'U'; sfx("pickup"); } }
+    }
+    for (int tx = t0; tx <= t1; tx++) { if (tx < 0 || tx >= LW || map[12][tx] != 'M') continue;
+        float cx = tx * TILE + 24;
+        if (trap_t[tx] == 0) { for (int k = 0; k < 2; k++) { Player *p = &pl[k]; if (p->active && p->alive && !p->hidden && fabsf(p->x - cx) < 46 && p->y > FLOOR_Y - 40) { trap_t[tx] = 0.01f; sfx("tick"); } } }
+        else { float before = trap_t[tx]; trap_t[tx] += DT;
+            if (before < 0.28f && trap_t[tx] >= 0.28f) { sfx("slam"); shake = fmaxf(shake, 5); spark_burst(cx, FLOOR_Y - 20, 8, 255, 230, 180);
+                for (int k = 0; k < 2; k++) { Player *p = &pl[k]; if (p->active && p->alive && !p->hidden && fabsf(p->x - cx) < 60 && p->y > FLOOR_Y - 70) hurt_player(p, cx); }
+                for (int j = 0; j < nen; j++) { Enemy *e = &en[j]; if (e->alive && e->type < E_CRATE && fabsf(e->x - cx) < 60 && e->y > FLOOR_Y - 70) enemy_damage(e, 3); } }
+            if (trap_t[tx] > 2.2f) trap_t[tx] = 0; }
+    }
+}
 /* ------------------------------------------------------------ the Ink Fiend (backstage) */
 static int any_player_in_zone(int z) { for (int i = 0; i < 2; i++) if (pl[i].active && pl[i].alive && zone_of(pl[i].x) == z) return 1; return 0; }
 static void update_fiend(void) {
@@ -1148,7 +1271,7 @@ static void update_fiend(void) {
 /* ------------------------------------------------------------ boss: Uncle Inky */
 enum { BS_INTRO, BS_IDLE, BS_SLAM_AIM, BS_SLAM_HIT, BS_NOTES, BS_SWEEP_WARN, BS_SWEEP, BS_TICKETS, BS_DEAD };
 static void boss_start(void) {
-    boss.active = 1; boss.state = BS_INTRO; boss.timer = 2.6f; boss.maxhp = boss.hp = level_no == 3 ? 180 : level_no == 2 ? 160 : level_no == 1 ? 140 : 110; boss.face = -1;
+    boss.active = 1; boss.state = BS_INTRO; boss.timer = 2.6f; boss.maxhp = boss.hp = level_no == 4 ? 200 : level_no == 3 ? 180 : level_no == 2 ? 160 : level_no == 1 ? 140 : 110; boss.face = -1;
     if (getenv("MM_BOSS_HP")) boss.hp = atoi(getenv("MM_BOSS_HP"));   /* tests */
     boss.x = ARENA_X + SCREEN_W - 230; boss.y = FLOOR_Y;
     arena_locked = 1; music_play(LEVELS[level_no].boss_music, 1); sfx(level_no == 1 ? "angry" : "roar1"); shake = 10;
@@ -1159,11 +1282,13 @@ static void boss_hit_player_box(float x, float y, float w, float h) {
 static void update_boss_rat(void);
 static void update_boss_splicer(void);
 static void update_boss_press(void);
+static void update_boss_collector(void);
 static void update_boss(void) {
     if (!boss.active) {
         if (!arena_locked) for (int k = 0; k < 2; k++) if (pl[k].active && pl[k].alive && pl[k].x > ARENA_X + 150) boss_start();
         return;
     }
+    if (level_no == 4) { update_boss_collector(); return; }
     if (level_no == 3) { update_boss_press(); return; }
     if (level_no == 2) { update_boss_splicer(); return; }
     if (level_no == 1) { update_boss_rat(); return; }
@@ -1257,6 +1382,7 @@ static void draw_sprite(Tex *t, float x, float feet, float scale, int face_right
 enum { RS_CHOP_AIM = 20, RS_CHOP, RS_PIZZA, RS_WAVE_WARN, RS_WAVE, RS_LEAP, RS_FALL };
 enum { SS_SNIP_AIM = 40, SS_SNIP, SS_FILM, SS_REELS, SS_FLICK_OUT, SS_FLICK_IN };
 enum { PS_STAMP_AIM = 60, PS_STAMP, PS_SHEETS, PS_ROLL_WARN, PS_ROLL };
+enum { CS_STAB_AIM = 80, CS_STAB, CS_THROW, CS_SUCK };
 static void update_boss_rat(void) {
     float angry = boss.hp < boss.maxhp / 2 ? 0.7f : 1.0f;
     boss.t += DT; if (boss.flash > 0) boss.flash--;
@@ -1545,6 +1671,90 @@ static void draw_boss_press(float ox, float oy) {
     double ang = boss.state == BS_DEAD ? sinf(frame_no * 0.5f) * 5 : 0;
     draw_sprite(t, x, y + 10, 1, boss.face > 0, boss.flash ? 170 : 0, 255, ang, 1.0f + 0.015f * sinf(boss.t * 8));
 }
+/* ------------------------------------------------------------ boss: The Collector (Show 5) */
+static void update_boss_collector(void) {
+    float angry = boss.hp < boss.maxhp / 2 ? 0.7f : 1.0f;
+    boss.t += DT; if (boss.flash > 0) boss.flash--;
+    boss.timer -= DT; boss.bob = sinf(boss.t * 2.4f) * 8;
+    Player *t = nearest_player(boss.x, boss.y, NULL);
+    float lo = ARENA_X + 250, hi = ARENA_X + SCREEN_W - 220;
+    if (t && boss.state != BS_DEAD) boss.face = t->x < boss.x ? -1 : 1;
+    switch (boss.state) {
+    case BS_INTRO: boss.pose = 0; if (boss.timer <= 0) { boss.state = BS_IDLE; boss.timer = 1.0f; } break;
+    case BS_IDLE:
+        boss.pose = angry < 1 ? 2 : 0;
+        if (t) { float want = t->x - boss.face * 380; boss.x += clampf(want - boss.x, -1, 1) * 120 / angry * DT; }
+        boss.x = clampf(boss.x, lo, hi);
+        if (boss.timer <= 0) {
+            int k = rand() % 3;
+            if (k == 0) { boss.state = CS_STAB_AIM; boss.slams = angry < 1 ? 3 : 2; boss.timer = 0.75f * angry; boss.targetx = t ? t->x : boss.x; sfx("charge"); }
+            else if (k == 1) { boss.state = CS_THROW; boss.slams = angry < 1 ? 6 : 4; boss.timer = 0.3f; }
+            else { boss.state = CS_SUCK; boss.timer = 2.4f; sfx("roar1"); message("HE'S TRYING TO BAG YOU! RUN!", 1.4f); }
+            if (angry < 1 && !boss.summoned) { boss.summoned = 1; spawn(E_SOLDIER, (int)((ARENA_X + 140) / TILE), 12); spawn(E_SOLDIER, (int)((ARENA_X + 480) / TILE), 12); sfx("summon"); }
+        }
+        break;
+    case CS_STAB_AIM:   /* a giant umbrella spike hovers over you, then plunges */
+        boss.pose = 1;
+        if (boss.timer > 0.25f && t) boss.targetx += (t->x - boss.targetx) * 0.1f;
+        if (boss.timer <= 0) { boss.state = CS_STAB; boss.timer = 0.3f; shake = 12; hitstop = 2; sfx("slam");
+            ring(boss.targetx, FLOOR_Y - 10, 120, 255, 240, 200); spark_burst(boss.targetx, FLOOR_Y - 8, 16, 255, 240, 200);
+            for (int k = 0; k < 6; k++) part_k(PK_DEBRIS, boss.targetx, FLOOR_Y - 6, (frand() - 0.5f) * 500, -200 - frand() * 300, 1.5f, 6, 1600, 110, 80, 50, 0); }
+        break;
+    case CS_STAB:
+        boss.pose = 1; boss_hit_player_box(boss.targetx, FLOOR_Y, 90, FLOOR_Y);
+        if (boss.timer <= 0) { if (--boss.slams > 0) { boss.state = CS_STAB_AIM; boss.timer = 0.5f * angry; } else { boss.state = BS_IDLE; boss.timer = 1.2f * angry; } }
+        break;
+    case CS_THROW:      /* pulls lost shoes out of the sack and hurls them */
+        boss.pose = 1;
+        if (boss.timer <= 0 && t) { float x0 = boss.x - boss.face * 40, y0 = boss.y - 330, dx = t->x - x0;
+            Proj *q = proj(P_SHOE, x0, y0, clampf(dx / 1.0f, -560, 560) + (frand() - 0.5f) * 120, -620, 1, 1); if (q) { q->grav = 1300; q->r = 16; q->bounces = 2; q->life = 4; }
+            sfx("throw"); boss.timer = 0.32f * angry; if (--boss.slams <= 0) { boss.state = BS_IDLE; boss.timer = 1.1f * angry; } }
+        break;
+    case CS_SUCK: {     /* opens the sack: everything gets dragged toward it. Run the other way */
+        boss.pose = angry < 1 ? 2 : 0;
+        float mx = boss.x - boss.face * 30, my = boss.y - 200;
+        for (int i = 0; i < 2; i++) { float a = frand() * 6.283f, r = 300 + frand() * 200; part(mx + cosf(a) * r, my + sinf(a) * r * 0.6f, -cosf(a) * r * 2.2f, -sinf(a) * r * 1.3f, 0.45f, 4, 0, 220, 210, 190, 0); }
+        if (frame_no % 10 == 0) sfx("summon");
+        for (int k = 0; k < 2; k++) { Player *p = &pl[k]; if (!p->active || !p->alive || p->hidden) continue;
+            float dir = boss.x < p->x ? -1 : 1, pull = 260 / angry * DT, vy0 = 0;
+            move_box(&p->x, &p->y, &(float){dir * pull / DT}, &vy0, 40, 120, 0); }
+        if (boss.timer <= 0) { boss.state = BS_IDLE; boss.timer = 1.0f * angry; }
+        break; }
+    case BS_DEAD:
+        if (boss.pose >= 0) boss.pose = 2;
+        if (frame_no % 4 == 0) { sfx("boom"); blood_spurt(boss.x + (frand() - 0.5f) * 160, boss.y - frand() * 300, frand() < 0.5f ? -1 : 1, 10, 700);
+            for (int k = 0; k < 3; k++) { Proj *q = proj(P_SHOE, boss.x, boss.y - 300, (frand() - 0.5f) * 700, -500 - frand() * 300, 0, 0); if (q) { q->grav = 1300; q->bounces = 2; q->life = 2; } }
+            if (frame_no % 8 == 0) gore_part(rand() % 12, boss.x + (frand() - 0.5f) * 200, boss.y - 120 - frand() * 200, 700, 1); }
+        if (!boss.summoned && boss.timer < 1.0f) {
+            boss.summoned = 1; shatter(&A.collector[2], boss.x, boss.y + 10, boss.face > 0, 4, 5, 850, 1); boss.pose = -1;
+            for (int k = 0; k < 6; k++) gore_part(11, boss.x, boss.y - 200, 800, 1);
+            gore_part(3, boss.x - 20, boss.y - 330, 900, 1); gore_part(3, boss.x + 20, boss.y - 330, 900, 1);
+            blood_spurt(boss.x, boss.y - 250, -1, 60, 900); blood_spurt(boss.x, boss.y - 250, 1, 50, 800);
+            for (int i = 0; i < 20; i++) part_k(PK_DEBRIS, boss.x, boss.y - 250, (frand() - 0.5f) * 1000, -300 - frand() * 600, 2.5f, 6 + frand() * 10, 1600, 120 + rand() % 120, 80 + rand() % 100, 50 + rand() % 80, 0);
+            ring(boss.x, boss.y - 200, 300, 255, 220, 160); shake = 24; hitstop = 10;
+        }
+        if (boss.timer <= 0 && scene == SC_PLAY) { scene = SC_CLEAR; scene_t = 0; music_play("mm_clear", 0); }
+        break;
+    }
+    if (boss.state != BS_DEAD && boss.state != BS_INTRO) boss_hit_player_box(boss.x, boss.y, 160, 300);
+}
+static void draw_boss_collector(float ox, float oy) {
+    float x = sx(boss.x) + ox, y = boss.y + oy + boss.bob;
+    if (boss.state == CS_STAB_AIM || boss.state == CS_STAB) {   /* a giant black umbrella spike */
+        float tx = sx(boss.targetx) + ox, k = boss.state == CS_STAB ? 1 : clampf(1 - boss.timer / 0.75f, 0, 1);
+        float tip = boss.state == CS_STAB ? FLOOR_Y + oy : 120 + oy + sinf(frame_no * 0.9f) * 4;
+        if (boss.state == CS_STAB_AIM) { draw_ellipse(&A.disc, tx, FLOOR_Y + oy, 30 + 24 * k, 7 + 4 * k, 0, 0, 0, (Uint8)(110 + 130 * k));
+            if ((frame_no / 4) % 2) draw_text_col(&A.small, "!", tx, FLOOR_Y + oy - 80, 0.8f, 1, 255, 60, 40, 255); }
+        draw_bar(tx, 0, tx, tip - 140, 10, 90, 60, 30, 255);   /* handle */
+        for (int i = 0; i < 6; i++) { float w = 70 - i * 11; fill_rect((int)(tx - w), (int)(tip - 140 + i * 20), (int)(w * 2), 22, 14, 12, 16, 255); }   /* folded canopy */
+        draw_bar(tx, tip - 30, tx, tip, 6, 200, 200, 210, 255);   /* metal ferrule tip */
+    }
+    if (boss.pose < 0) return;
+    Tex *t = &A.collector[boss.pose];
+    double ang = boss.state == BS_DEAD ? sinf(frame_no * 0.5f) * 6 : sinf(boss.t * 1.2f) * 3;
+    draw_sprite(t, x, y + 10, 1, boss.face > 0, boss.flash ? 170 : 0, 255, ang, 1.0f);
+    if (boss.state == CS_SUCK) draw_glow(&A.disc, x - boss.face * 40, y - 220, 90 + sinf(frame_no * 0.5f) * 15, 40, 30, 50, 180);
+}
 /* ------------------------------------------------------------ projectiles, pickups, particles */
 static void update_proj(void) {
     for (int i = 0; i < MAXP; i++) {
@@ -1561,6 +1771,8 @@ static void update_proj(void) {
                 continue; }
             if (p->type == P_PIZZA && p->vy >= 0 && p->bounces > 0) { p->bounces--; p->vy = -380; p->y = ty * TILE - 1; splat(p->x, ty * TILE, 10, 1, 170, 30, 20); continue; }
             if (p->type == P_CONFETTI) { for (int i = 0; i < 12; i++) part(p->x, p->y, (frand() - 0.5f) * 400, -100 - frand() * 300, 0.8f, 4, 900, 120 + rand() % 136, 80 + rand() % 176, 80 + rand() % 176, 0); spark_burst(p->x, p->y, 6, 255, 220, 120); }
+            if (p->type == P_SHOE && p->vy >= 0 && p->bounces > 0) { p->bounces--; p->vy = -360; p->y = ty * TILE - 1; sfx("boing"); continue; }
+            if (p->type == P_CORK) { spark_burst(p->x, p->y, 5, 230, 200, 150); }
             if (p->type == P_INKBLOB) { sfx("splat"); for (int i = 0; i < 10; i++) part_k(PK_BLOOD, p->x, p->y - 4, (frand() - 0.5f) * 400, -100 - frand() * 250, 1.0f, 4 + frand() * 4, 1400, 12, 8, 12, 0); splat(p->x, ty * TILE + 2, 22, 1, 10, 8, 10); }
             if (p->type == P_DRIP || p->type == P_NOTE) { ink_burst(p->x, p->y, 6, 140); splat(p->x, ty * TILE, 12, 1, 12, 8, 12); }
             else if (p->type == P_RIVET) { spark_burst(p->x, p->y, 10, 255, 160, 60); smoke(p->x, p->y, 2, 90); ring(p->x, p->y, 40, 255, 170, 80); }
@@ -1604,8 +1816,8 @@ static void update_proj(void) {
                     for (int j = 0; j < MAXP; j++) if (pr[j].enemy) pr[j].alive = 0;
                     boss.pose = 2;
                 }
-                if (boss.hp <= 0) { boss.summoned = 0; boss.state = BS_DEAD; boss.timer = 3.5f; score += 10000; message(level_no == 3 ? "STOP THE PRESSES!" : level_no == 2 ? "THE SPLICER GETS CUT!" : level_no == 1 ? "BIG CHEESE IS TOAST!" : "UNCLE INKY TAKES A BOW!", 3.0f); shake = 16; sfx("roar2"); hitstop = 18; }
-                else if (boss.hp < boss.maxhp / 2 && boss.hp + p->dmg >= boss.maxhp / 2) { sfx("angry"); message(level_no == 3 ? "IT'S OVERHEATING!" : level_no == 2 ? "SHE'S UNSPOOLING!" : "HE'S STEAMED!", 1.5f); shake = 10; }
+                if (boss.hp <= 0) { boss.summoned = 0; boss.state = BS_DEAD; boss.timer = 3.5f; score += 10000; message(level_no == 4 ? "CLAIM TICKET: VOID!" : level_no == 3 ? "STOP THE PRESSES!" : level_no == 2 ? "THE SPLICER GETS CUT!" : level_no == 1 ? "BIG CHEESE IS TOAST!" : "UNCLE INKY TAKES A BOW!", 3.0f); shake = 16; sfx("roar2"); hitstop = 18; }
+                else if (boss.hp < boss.maxhp / 2 && boss.hp + p->dmg >= boss.maxhp / 2) { sfx("angry"); message(level_no == 4 ? "HE WANTS IT ALL BACK!" : level_no == 3 ? "IT'S OVERHEATING!" : level_no == 2 ? "SHE'S UNSPOOLING!" : "HE'S STEAMED!", 1.5f); shake = 10; }
             }
         }
     }
@@ -1750,7 +1962,7 @@ void game_step(const Input pads[MAX_PADS], const int connected[MAX_PADS]) {
         const char *const *ZONE_MUSIC = LEVELS[level_no].music;
         Player *lead = pl[0].active ? &pl[0] : &pl[1];
         const char *want = ZONE_MUSIC[zone_of(lead->x)];
-        static int avail[NUM_LEVELS][6] = {{-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}};
+        static int avail[NUM_LEVELS][6] = {{-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}, {-1, -1, -1, -1, -1, -1}};
         int z = zone_of(lead->x);
         if (avail[level_no][z] < 0) avail[level_no][z] = music_available(want);
         music_play(avail[level_no][z] ? want : LEVELS[level_no].music[0], 1);
@@ -1758,7 +1970,7 @@ void game_step(const Input pads[MAX_PADS], const int connected[MAX_PADS]) {
     for (int i = 0; i < 2; i++) update_player(&pl[i], &pads[pl[i].pad]);
     op_input(&pads[op_pad]); auto_camera();
     if (negative_t > 0) negative_t -= DT;
-    update_enemies(); update_fiend(); update_ovens(); update_saws(); update_crushers_vents(); update_boss(); update_proj();
+    update_enemies(); update_fiend(); update_ovens(); update_saws(); update_crushers_vents(); update_blocks_traps(); update_boss(); update_proj();
 
     /* camera */
     float tx = 0; int n = 0;
@@ -1805,6 +2017,22 @@ static void draw_tiles(float ox, float oy) {
                 for (int k = 0; k < 4; k++) fill_rect((int)x + k * 12, (int)y + 6, 6, 3, 200, 196, 186, on ? 160 : 55);
                 if (!on && ph > 2.9f && (frame_no / 3) % 2) fill_rect((int)x, (int)y + 4, TILE, 8, 220, 216, 206, 90);
             }
+        } else if (c == 'U') {   /* wobbly toy block */
+            float ct = crumble_t[ty][tx], wob = ct > 0 ? sinf(frame_no * 1.7f) * 3 * (ct / 0.55f + 0.3f) : 0;
+            Uint8 br = (Uint8)(150 + (tx * 37) % 100), bg_ = (Uint8)(60 + (tx * 53) % 140), bb = (Uint8)(50 + (tx * 71) % 120);
+            fill_rect((int)(x + wob), (int)y, TILE, TILE - 4, 30, 20, 14, 255); fill_rect((int)(x + wob) + 3, (int)y + 3, TILE - 6, TILE - 10, br, bg_, bb, 255);
+            fill_rect((int)(x + wob) + 9, (int)y + 9, TILE - 18, TILE - 22, (Uint8)(br * 0.8f), (Uint8)(bg_ * 0.8f), (Uint8)(bb * 0.8f), 255);
+            draw_text_col(&A.small, (const char[]){(char)('A' + (tx * 7 + ty) % 26), 0}, x + wob + 24, y + 10, 0.5f, 1, 250, 240, 210, 255);
+        } else if (c == 'u') {   /* a crumbled block, stacking itself back up */
+            if (regrow_t[ty][tx] < 0.8f && (frame_no / 3) % 2) fill_rect((int)x + 3, (int)y + 3, TILE - 6, TILE - 10, 220, 200, 160, 70);
+        } else if (c == 'M') {   /* giant mousetrap */
+            float tt = trap_t[tx]; int snapped = tt >= 0.28f && tt < 2.0f;
+            fill_rect((int)x - 10, (int)y + 34, TILE + 20, 14, 40, 26, 14, 255); fill_rect((int)x - 8, (int)y + 36, TILE + 16, 10, 170, 120, 70, 255);
+            draw_ellipse(&A.disc, x + 24, y + 32, 9, 7, 255, 210, 80, 255);   /* cheese */
+            if (snapped) { draw_bar(x - 6, y + 34, x + 54, y + 34, 5, 200, 200, 210, 255); draw_bar(x - 6, y + 34, x - 6, y + 24, 5, 200, 200, 210, 255); }
+            else { float a = tt > 0 ? 1.2f + tt * 3 : 1.5708f;   /* the bar, cocked back */
+                draw_bar(x - 6, y + 40, x - 6 + cosf(a) * 60, y + 40 - sinf(a) * 60, 5, 200, 200, 210, 255);
+                if (tt > 0 && (frame_no / 2) % 2) draw_text_col(&A.small, "!", x + 24, y - 10, 0.6f, 1, 255, 80, 40, 255); }
         } else if (c == 'X') {   /* ceiling crusher: shaft + riveted iron head */
             float b = crusher_bottom(tx) + oy, cx = x + 24, ph = crush_phase(tx);
             fill_rect((int)cx - 10, (int)y, 20, (int)(b - 40 - y), 70, 60, 50, 255); fill_rect((int)cx - 4, (int)y, 4, (int)(b - 40 - y), 150, 130, 100, 255);
@@ -2034,6 +2262,11 @@ static void draw_proj(float ox, float oy) {
             for (int k = 0; k < 5; k++) { float b = a + k * 1.2566f; draw_ellipse(&A.disc, x + cosf(b) * 16, cy + sinf(b) * 16, 6, 6, 20, 18, 18, 255); }
             draw_ellipse(&A.disc, x, cy, 5, 5, 220, 216, 206, 255);
             fill_rect((int)x - 26, FLOOR_Y + (int)oy - 4, 52, 4, 0, 0, 0, 90); break; }
+        case P_CORK: draw_ellipse(&A.disc, x, y, 11, 8, 60, 36, 18, 255); draw_ellipse(&A.disc, x, y, 9, 6, 200, 150, 90, 255);
+            draw_ellipse(&A.disc, x - p->vx * 0.01f, y, 3, 5, 150, 100, 60, 255); break;
+        case P_SHOE: { float a = frame_no * 0.3f * (p->vx > 0 ? 1 : -1), ca = cosf(a), sa = sinf(a);
+            draw_bar(x - ca * 18, y - sa * 18, x + ca * 18, y + sa * 18, 22, 30, 18, 10, 255); draw_bar(x - ca * 16, y - sa * 16, x + ca * 14, y + sa * 14, 16, 120, 70, 40, 255);
+            draw_ellipse(&A.disc, x - ca * 10 - sa * 8, y - sa * 10 + ca * 8, 8, 8, 30, 18, 10, 255); break; }
         case P_INKBLOB: draw_ellipse(&A.disc, x, y, 14, 12, 10, 8, 10, 255); draw_ellipse(&A.disc, x - 4, y - 4, 4, 3, 160, 160, 170, 200);
             draw_ellipse(&A.disc, x - p->vx * 0.02f, y - p->vy * 0.02f, 8, 7, 10, 8, 10, 255); break;
         case P_SHEET: { float a = frame_no * 0.5f + i, ca = cosf(a) * 26, sa = sinf(a) * 26, cb = -sinf(a) * 18, sb = cosf(a) * 18;
@@ -2094,8 +2327,10 @@ static void draw_fiend(float ox, float oy) {
 static void draw_boss_rat(float ox, float oy);
 static void draw_boss_splicer(float ox, float oy);
 static void draw_boss_press(float ox, float oy);
+static void draw_boss_collector(float ox, float oy);
 static void draw_boss(float ox, float oy) {
     if (!boss.active) return;
+    if (level_no == 4) { draw_boss_collector(ox, oy); return; }
     if (level_no == 3) { draw_boss_press(ox, oy); return; }
     if (level_no == 2) { draw_boss_splicer(ox, oy); return; }
     if (level_no == 1) { draw_boss_rat(ox, oy); return; }
@@ -2202,9 +2437,9 @@ static void draw_dark(void) {
 }
 
 static void draw_bg(float ox) {
-    Tex *bgt = (level_no == 3 && A.bg4.tex) ? &A.bg4 : (level_no == 2 && A.bg3.tex) ? &A.bg3 : (level_no == 1 && A.bg2.tex) ? &A.bg2 : &A.bg;
+    Tex *bgt = (level_no == 4 && A.bg5.tex) ? &A.bg5 : (level_no == 3 && A.bg4.tex) ? &A.bg4 : (level_no == 2 && A.bg3.tex) ? &A.bg3 : (level_no == 1 && A.bg2.tex) ? &A.bg2 : &A.bg;
     if (bgt->tex) {
-        float k = (bgt == &A.bg3 || bgt == &A.bg4) ? 1.12f : 1.0f;   /* the cartoon reel's painted floor sits higher: scale it down to ours */
+        float k = (bgt == &A.bg3 || bgt == &A.bg4 || bgt == &A.bg5) ? 1.12f : 1.0f;   /* the cartoon reel's painted floor sits higher: scale it down to ours */
         float par = camx * 0.35f; float w = bgt->w * k;
         float off = -fmodf(par, w);
         for (float x = off; x < SCREEN_W; x += w) draw_tex(bgt, x + ox * 0.3f, 0, w, SCREEN_H * k, 0, 255);
@@ -2308,6 +2543,8 @@ static void draw_feed(int z, float fx, float fy, float fw, float fh, int big) {
             else if (c == 'B') PR(x + w * 0.2f, y, w * 0.6f, w, 160, 160, 140, 255);
             else if (c == 'O') PR(x, y, w, w, 150, 90, 70, 255);
             else if (c == '>' || c == '<') PR(x, y, w, w * 0.5f, 120, 120, 110, 255);
+            else if (c == 'U') PR(x, y, w, w * 0.8f, 220, 150, 90, 255);
+            else if (c == 'M') PR(x, y + w * 0.6f, w, w * 0.4f, 230, 200, 120, 255);
             else if (c == 'X') PR(x - w * 0.5f, oy + (crusher_bottom(tx) - 44) * s, w * 2, 44 * s, 200, 120, 80, 255);
             else if (c == 'V') PR(x, y + w * 0.6f, w, w * 0.4f, vent_on(tx) ? 240 : 140, vent_on(tx) ? 240 : 140, vent_on(tx) ? 240 : 140, 255);
             else if (c == 'F') { if (film_on(tx)) PR(x, y, w, w * 0.3f + 1, 200, 200, 190, 255); }

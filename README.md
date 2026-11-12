@@ -53,6 +53,18 @@ then The Press Room.
 * **Boss: The Big Press**, a living printing press: iron printing plates that track you and STAMP, razor-edged printed
   sheets that flutter at you, and an ink roller that rolls across the floor (jump it). When it overheats it calls imps.
 
+## Level 5: Lost & Found
+The theatre's lost-property basement, where everything anyone ever left behind has come alive. Coat Check, Lost
+Property, Toy Chest, Luggage Hall, Doll Hospital, then The Claim Desk.
+* **Snapping Suitcases**: big chomping hops toward you.
+* **Toy Soldiers**: march in, kneel and fire popgun corks low along the floor (jump them, ducking won't help).
+* **Umbrella Bats**: ragged umbrellas that flap around and dive-bomb you.
+* **Toy-block bridges**: lettered blocks crumble a moment after you land on them, then stack themselves back up.
+* **Giant mousetraps**: step close and they snap (they'll catch enemies too).
+* **Boss: The Collector**, a ghoulish lost-property clerk with umbrella arms and a sack of everything ever lost:
+  umbrella spikes that track you and plunge, a barrage of thrown shoes, and the sack, which drags you toward him (run
+  the other way). When he's angry he calls in toy soldiers.
+
 ## Gear (Ghosts 'n Goblins style)
 Full gear, then torn overalls (the hard hat flies off), then **boxers**, then you're out. GEAR crates put clothes back on.
 TOOLS crates drop a cycling weapon icon: grab it when it shows the one you want:
@@ -111,8 +123,11 @@ Drop the .ogg files into `engine/content/music` with these names; any that are m
 | `mm_level4` | The Ink Works | industrial organ rock: anvils, chains, steam and a printing-press stamp on the beat |
 | `mm_pipes` | Pipe Works, Boiler Furnace | the same theme as a claustrophobic crawl: dripping ink, groaning pipes |
 | `mm_boss4` | The Big Press | crushing industrial organ-metal locked to the press stamp |
+| `mm_level5` | Lost & Found | broken-lullaby organ rock with toy piano, music box and squeaky-toy percussion |
+| `mm_dolls` | Luggage Hall, Doll Hospital | the lullaby slowed and warped: ticking clock, porcelain clinks |
+| `mm_boss5` | The Collector | frantic organ-metal toy-box lullaby with a clanging service bell |
 
-All seventeen tracks were generated in Runway around one shared D-minor organ theme, with LOOPSTART tags so loops skip the intros.
+All twenty tracks were generated in Runway around one shared D-minor organ theme, with LOOPSTART tags so loops skip the intros.
 
 ## Gore and effects
 Enemies bleed oil-blood on every hit and come apart when they die: the sprite is chopped into chunks, plus painted
