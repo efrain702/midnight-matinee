@@ -30,7 +30,7 @@ static float signf(float v) { return v < 0 ? -1.0f : 1.0f; }
 #define HERO_FRAMES 8
 #define BG7_K 1.12f   /* painted floor height of the new show backgrounds */
 #define BG8_K 1.12f
-#define NCHARS 2   /* 0 Junior, 1 Rosie */
+#define NCHARS 2   /* 0 Joe, 1 Rosie */
 typedef struct { Tex hero[NCHARS][3][HERO_FRAMES]; Tex usher[5], dog[5], blob[4], inky[3], gore[12], goat[5], meat[5], slice[5], rat[5], cleaver, gore2[12], bg2, bomb[5], ghost[5], glove[5], splicer[3], bg3, imp[5], worker[5], eel[5], press[3], bg4, suitcase[5], soldier[5], umbrella[5], collector[3], bg5, unbound[3], bg6, bg7, bg8, mannequin[5], puff[5], crow[5], bulb[5], vanity[3], headliner[3]; Tex bg, disc, vignette, mask, grain[4]; Font font, small; } Assets;
 static Assets A;
 static Font padFont, padSmall; static Tex padDisc;
@@ -558,7 +558,7 @@ static Pickup pick[8];
 static float power = 100, lit[6], camx, shake, msg_t, warn_t, cam_flash;
 static char msg[64];
 static int p1_char = -1;   /* runner picked on the title screen; player 2 gets the other one */
-static const char *CHAR_NAME[NCHARS] = {"JUNIOR", "ROSIE"};
+static const char *CHAR_NAME[NCHARS] = {"JOE", "ROSIE"};
 static int scene, menu_sel = 1, cam_sel = 0, quit_req, frame_no, darkness_on;
 enum { SC_TITLE, SC_PLAY, SC_OVER, SC_CLEAR, SC_END, SC_LOAD, SC_SELECT, SC_OPTIONS, SC_EXTRAS, SC_GALLERY, SC_JUKEBOX, SC_WARDROBE, SC_INTRO, SC_CREDITS, SC_RUSHDONE };
 static float scene_t, ping_cool, op_idle;
@@ -738,7 +738,7 @@ void game_init(void) {
         Tex *t = &A.hero[c][s][i]; *t = load_or_empty(rel);
         if (!t->tex && s > 0) *t = A.hero[c][0][i];
         if (!t->tex && i > 0) *t = A.hero[c][s][0];   /* gear art not made yet: reuse full gear */
-        if (!t->tex && c > 0) *t = A.hero[0][s][i];   /* character not drawn yet: borrow Junior */
+        if (!t->tex && c > 0) *t = A.hero[0][s][i];   /* character not drawn yet: borrow Joe */
     }
     for (int i = 0; i < 5; i++) {
         snprintf(rel, sizeof rel, "chars/usher_%d.png", i); A.usher[i] = load_or_empty(rel); if (!A.usher[i].tex && i) A.usher[i] = A.usher[i % 2];
@@ -3912,7 +3912,7 @@ static void step_wardrobe(unsigned anyp) {
 }
 static const char *INTRO_TEXT[4] = {
     "MIDNIGHT. THE GRAND MATINEE THEATRE HAS BEEN DARK FOR FIFTY YEARS...",
-    "JUNIOR AND ROSIE TOOK THE NIGHT SHIFT: GET THE OLD PLACE'S POWER BACK ON.",
+    "JOE AND ROSIE TOOK THE NIGHT SHIFT: GET THE OLD PLACE'S POWER BACK ON.",
     "BUT THE MOMENT THE LIGHTS CAME UP, THE OLD PROJECTOR STARTED ROLLING ALL BY ITSELF.",
     "UNCLE INKY IS BACK, AND HIS SHOW NEVER ENDS. KEEP THE LIGHTS ON. SURVIVE THE MATINEE."};
 #define INTRO_PANEL_T 7.0f
@@ -3926,7 +3926,7 @@ static void step_intro(unsigned anyp) {
     if (scene_t >= INTRO_PANEL_T) { if (++intro_panel >= 4) { end_intro(); return; } scene_t = 0; }
 }
 static const char *CREDITS[] = {
-    "#MIDNIGHT MATINEE", "", "A GAME BY", "@JUNIOR GOMEZ", "", "", "STARRING THE NIGHT CREW", "@JUNIOR", "@ROSIE", "", "",
+    "#MIDNIGHT MATINEE", "", "A GAME BY", "@EFRAIN GOMEZ", "", "", "STARRING THE NIGHT CREW", "@JOE", "@ROSIE", "", "",
     "AND TONIGHT'S SHOWS", "*0", "*1", "*2", "*3", "*4", "*5", "*6", "*7", "", "",
     "ART, ANIMATION, MUSIC AND SOUND", "@MADE WITH RUNWAY", "", "PROGRAMMING", "@BUILT WITH CLAUDE", "", "ENGINE", "@C + SDL2 ON THE WII U, VIA WUT AND AROMA", "", "",
     "NO ANIMATRONICS WERE HARMED", "(SEVERAL WERE DEEPLY INCONVENIENCED)", "", "", "", "#THANKS FOR WATCHING THE SHOW", "", "SEE YOU AT THE NEXT MATINEE..."};

@@ -25,7 +25,7 @@ if (COMMAND wut_create_rpx)
         CONTENT "${CMAKE_CURRENT_SOURCE_DIR}/engine/content"
         NAME "Midnight Matinee"
         SHORTNAME "Midnight Matinee"
-        AUTHOR "Junior Gomez"
+        AUTHOR "Efrain Gomez"
         ICON "${CMAKE_CURRENT_SOURCE_DIR}/meta/icon.png"
         TVSPLASH "${CMAKE_CURRENT_SOURCE_DIR}/meta/splash_tv.png"
         DRCSPLASH "${CMAKE_CURRENT_SOURCE_DIR}/meta/splash_drc.png")
