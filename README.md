@@ -27,6 +27,20 @@ with Left/Right; clearing a show carries your lives, weapon and score into the n
 * **Boss: Big Cheese**, the chef who ate the birthday: cleaver chops aimed at you, bouncing pizzas, a cheese wave along
   the floor (jump it) and a leaping body slam with a shockwave. When he's angry he calls in meatballs.
 
+## Level 3: Cartoon Reels
+You fall into the theatre's lost cartoon reels: a scratchy black-and-white 1930s cartoon where you're the only thing in
+colour. Title Card, Barnyard Short, Spook Short, Film Vault, Cutting Room, then The Splicing Table.
+* **Fuse Bombs**: hop at you; get close and the fuse burns down, then KA-BOOM (shooting one sets it off, and the blast
+  takes out other enemies too).
+* **Film Ghosts**: float after you and fade out of the picture; you can only hit them (and they can only hit you) while
+  they're solid.
+* **Crawling Gloves**: scuttle along on their fingertips, crouch, then leap in with a punch.
+* **Skipping frames**: strips of film you can stand on blink in and out of the picture (they flicker before they go).
+* **Sprocket saws**: spinning toothed sprockets, some swinging up and down on chains.
+* **Boss: The Splicer**, a film-reel spider with a cracked doll face and scissor legs: giant scissor snips that track
+  you, spat strips of film, film reels that rain down and roll, and a frame-skip where the picture flashes and she
+  reappears on your other side. When she's angry she sends in bombs.
+
 ## Gear (Ghosts 'n Goblins style)
 Full gear, then torn overalls (the hard hat flies off), then **boxers**, then you're out. GEAR crates put clothes back on.
 TOOLS crates drop a cycling weapon icon: grab it when it shows the one you want:
@@ -79,8 +93,11 @@ Drop the .ogg files into `engine/content/music` with these names; any that are m
 | `mm_level2` | Pizza Party | party-organ polka rock, carnival calliope over the band |
 | `mm_kitchen` | Kitchen, Delivery Dock | the same tune over sizzling, clattering pots and machinery |
 | `mm_boss2` | Big Cheese | stomping organ-metal tarantella |
+| `mm_level3` | Cartoon Reels | 1930s cartoon ragtime on organ, honky-tonk piano and plunger trumpet over rock drums |
+| `mm_vault` | Film Vault, Cutting Room | the same tune slowed and twisted: ticking projector, snipping scissors |
+| `mm_boss3` | The Splicer | frantic organ-metal cartoon chase |
 
-All eleven tracks were generated in Runway around one shared D-minor organ theme, with LOOPSTART tags so loops skip the intros.
+All fourteen tracks were generated in Runway around one shared D-minor organ theme, with LOOPSTART tags so loops skip the intros.
 
 ## Gore and effects
 Enemies bleed oil-blood on every hit and come apart when they die: the sprite is chopped into chunks, plus painted
