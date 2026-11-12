@@ -138,6 +138,7 @@ int main(int argc, char **argv) {
     long maxf = getenv("MM_FRAMES") ? atol(getenv("MM_FRAMES")) : -1;
     int fake_pads = getenv("MM_PADS") ? atoi(getenv("MM_PADS")) : 1;
     int check = getenv("MM_CHECK") != NULL;
+    long shot_from = getenv("MM_SHOT_FROM") ? atol(getenv("MM_SHOT_FROM")) : 0;   /* tests: start saving shots at this frame */
     int draw_every = getenv("MM_DRAW_EVERY") ? atoi(getenv("MM_DRAW_EVERY")) : 0;
 
     SDL_GameController *gc[MAX_PADS] = {0};
@@ -186,7 +187,7 @@ int main(int argc, char **argv) {
             if (game_wants_quit()) running = 0;
         }
         if (steps == 0 && !headless) { SDL_Delay(1); continue; }
-        int shoot_now = headless && shots && every > 0 && frame % every == 0;
+        int shoot_now = headless && shots && every > 0 && frame % every == 0 && frame >= shot_from;
         if (headless && !shoot_now && !(draw_every > 0 && frame % draw_every == 0)) continue;   /* MM_DRAW_EVERY: draw without saving (tests) */
         gfx_set_renderer(ren); game_draw();
         if (padRen) { gfx_set_renderer(padRen); SDL_SetRenderDrawColor(padRen, 0, 0, 0, 255); SDL_RenderClear(padRen); game_draw_pad(); gfx_set_renderer(ren); }
