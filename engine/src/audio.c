@@ -15,7 +15,8 @@ static const char *SFX[] = {"jump", "throw", "rivet", "sizzle", "boing", "hit", 
     "land_wood", "land_metal", "land_tile", "reel", "iris", "boss_sting", "confirm", "dizzy",
     "vo_joe_hurt", "vo_joe_lights", "vo_joe_reel", "vo_joe_go", "vo_joe_win", "vo_joe_ko",
     "vo_rosie_hurt", "vo_rosie_lights", "vo_rosie_reel", "vo_rosie_go", "vo_rosie_win", "vo_rosie_ko",
-    "ann_logo", "ann_title", "ann_clear", "ann_over"};
+    "ann_logo", "ann_title", "ann_clear", "ann_over",
+    "super_joe", "super_rosie", "super_ready", "shop_buy"};
 #define NSFX (int)(sizeof SFX / sizeof *SFX)
 static Mix_Chunk *chunks[NSFX];
 
@@ -24,6 +25,7 @@ void audio_init(void) {
     if (Mix_OpenAudio(48000, AUDIO_S16SYS, 2, 2048) < 0) { SDL_Log("audio: %s", Mix_GetError()); return; }
     Mix_Init(MIX_INIT_OGG);
     Mix_AllocateChannels(32);
+    Mix_ReserveChannels(1);   /* channel 0: voices (narration, boss taunts) never get cut off by effects */
     char rel[64];
     for (int i = 0; i < NSFX; i++) {
         snprintf(rel, sizeof rel, "sfx/%s.wav", SFX[i]);
@@ -99,3 +101,18 @@ int music_available(const char *name) {   /* is music/<name>.ogg on the SD card?
     SDL_RWops *f = SDL_RWFromFile(content_path(rel), "rb");
     if (!f) return 0; SDL_RWclose(f); return 1;
 }
+
+/* ---- voices: read from the card when needed (they're long), one at a time on the reserved channel ---- */
+static Mix_Chunk *voice_chunk;
+void voice_stop(void) { if (!ok) return; Mix_HaltChannel(0); if (voice_chunk) { Mix_FreeChunk(voice_chunk); voice_chunk = NULL; } }
+int voice_play(const char *name) {
+    if (!ok) return 0;
+    voice_stop();
+    char rel[96]; snprintf(rel, sizeof rel, "vo/%s.wav", name);
+    voice_chunk = Mix_LoadWAV(content_path(rel));
+    if (!voice_chunk) return 0;
+    Mix_VolumeChunk(voice_chunk, MIX_MAX_VOLUME);
+    Mix_PlayChannel(0, voice_chunk, 0);
+    return 1;
+}
+int voice_playing(void) { return ok && Mix_Playing(0); }

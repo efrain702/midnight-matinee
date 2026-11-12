@@ -5,7 +5,8 @@
 #include <sys/stat.h>
 
 #define SAVE_MAGIC 0x4D4D5356u   /* "MMSV" */
-#define SAVE_VERSION 2   /* 2: room for the secret ninth show (version 1 files are converted) */
+#define SAVE_VERSION 3   /* 2: the secret ninth show; 3: Ticket Booth, Monster Book, new settings (older files are converted) */
+#define V2_SIZE 156       /* a version 2 file: everything up to spare[7] */
 
 SaveData save;
 int save_slot;
@@ -44,7 +45,7 @@ static void path(char *out, size_t n, int slot, const char *suffix) {
 static void defaults(SaveData *d) {
     memset(d, 0, sizeof *d);
     d->magic = SAVE_MAGIC; d->version = SAVE_VERSION;
-    d->music_vol = 8; d->sfx_vol = 8; d->rumble = 1; d->layout = 0; d->shake = 1; d->difficulty = 1;
+    d->music_vol = 8; d->sfx_vol = 8; d->rumble = 1; d->layout = 0; d->shake = 1; d->difficulty = 1; d->subtitles = 1;
 }
 static void sanitize(SaveData *d) {   /* never trust the file blindly */
     for (int r = 0; r < 2; r++) if (d->reached[r] >= SAVE_SHOWS) d->reached[r] = SAVE_SHOWS - 1;
@@ -59,6 +60,9 @@ static void sanitize(SaveData *d) {   /* never trust the file blindly */
     if (d->style > 1) d->style = 0;
     if (d->runner > 1) d->runner = 0;
     if (d->language > 1) d->language = 0;
+    if (d->tickets < 0 || d->tickets > 999999) d->tickets = 0;
+    if (d->up_gun > 3) d->up_gun = 3; if (d->up_armor > 2) d->up_armor = 2; if (d->up_power > 2) d->up_power = 2; if (d->up_super > 2) d->up_super = 2;
+    if (d->screens > 1) d->screens = 0; if (d->subtitles > 1) d->subtitles = 1; if (d->assist > 1) d->assist = 0;
 }
 /* the layout before the ninth show existed */
 typedef struct {
@@ -94,12 +98,16 @@ static int read_file(int slot, SaveData *out) {
     SaveData d;
     if (n == sizeof d) { memcpy(&d, buf, sizeof d); if (d.magic != SAVE_MAGIC || d.version != SAVE_VERSION) return 0; }
     else if (n == sizeof(SaveDataV1)) { if (!from_v1(buf, &d)) return 0; }
+    else if (n == V2_SIZE) {   /* version 3 only added fields at the end */
+        unsigned m, v; memcpy(&m, buf, 4); memcpy(&v, buf + 4, 4); if (m != SAVE_MAGIC || v != 2) return 0;
+        defaults(&d); memcpy(&d, buf, V2_SIZE); d.version = SAVE_VERSION; }
     else return 0;
     sanitize(&d); *out = d; return 1;
 }
 static void apply_settings(const SaveData *s) {
     save.music_vol = s->music_vol; save.sfx_vol = s->sfx_vol; save.rumble = s->rumble; save.layout = s->layout;
     save.shake = s->shake; save.difficulty = s->difficulty; save.style = s->style; save.language = s->language;
+    save.screens = s->screens; save.subtitles = s->subtitles; save.assist = s->assist;
 }
 static int write_file(int slot, const SaveData *d) {
     char p[256], tmp[256]; path(p, sizeof p, slot, ""); path(tmp, sizeof tmp, slot, ".tmp");

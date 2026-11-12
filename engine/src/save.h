@@ -19,6 +19,15 @@ typedef struct {
     unsigned char language, breakers_flipped, closets_hidden;
     unsigned char secret_seen;            /* the "a secret show has opened" note was shown */
     unsigned char spare[7];
+    /* ---- version 3 ---- */
+    int tickets;                          /* Ticket Booth currency (earned from score) */
+    unsigned char up_gun, up_armor, up_power, up_super;   /* Ticket Booth upgrades bought */
+    unsigned char book[8];                /* Monster Book: bit per enemy type (0-31) and boss (32-40) defeated */
+    unsigned char screens;                /* 0 TV + GamePad office, 1 same picture on both (off-TV play); next launch */
+    unsigned char subtitles, assist;      /* settings */
+    unsigned char rehearsed;              /* finished the Rehearsal */
+    unsigned short remix_cleared;         /* Midnight Remix: bit per show beaten */
+    unsigned char spare3[10];
 } SaveData;
 
 #define SAVE_SLOTS 3

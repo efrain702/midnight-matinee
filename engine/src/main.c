@@ -22,6 +22,7 @@
 #include "gfx.h"
 #include "audio.h"
 #include "game.h"
+#include "save.h"
 
 typedef struct { int a, b; unsigned keys; } ScriptLine;
 static ScriptLine script[2][512]; static int nscript[2];
@@ -33,7 +34,7 @@ static unsigned keys_from(const char *s) {
         case 'D': k |= B_DOWN; break;  case 'J': k |= B_JUMP; break;  case 'A': k |= B_SHOOT; break;
         case 'K': k |= B_LOCK; break;  case 'W': k |= B_WEAPON; break;
         case '[': k |= B_CAMPREV; break; case ']': k |= B_CAMNEXT; break;
-        case 'P': k |= B_PING; break;  case 'G': k |= B_LIGHTS; break; case 'T': k |= B_START; break;
+        case 'P': k |= B_PING; break;  case 'G': k |= B_LIGHTS; break; case 'T': k |= B_START; break; case 'S': k |= B_SUPER; break;
     }
     return k;
 }
@@ -61,7 +62,7 @@ static unsigned read_pad(SDL_GameController *gc) {
     int swap = game_layout();   /* Options: "A JUMPS / B SHOOTS" */
     if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_B)) k |= swap ? B_SHOOT : B_JUMP;
     if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_A)) k |= swap ? B_JUMP : B_SHOOT;
-    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_Y)) k |= B_SHOOT;
+    if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_Y)) k |= B_SUPER;
     if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_X)) k |= B_LIGHTS;
     if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)) k |= B_LOCK;
     if (SDL_GameControllerGetButton(gc, SDL_CONTROLLER_BUTTON_LEFTSHOULDER)) k |= B_WEAPON;
@@ -83,6 +84,7 @@ static unsigned read_keys(void) {
     if (ks[SDL_SCANCODE_Q]) k |= B_CAMPREV;  if (ks[SDL_SCANCODE_E]) k |= B_CAMNEXT;
     if (ks[SDL_SCANCODE_W]) k |= B_PING;     if (ks[SDL_SCANCODE_R]) k |= B_LIGHTS;
     if (ks[SDL_SCANCODE_RETURN]) k |= B_START;
+    if (ks[SDL_SCANCODE_C]) k |= B_SUPER;
     return k;
 }
 
@@ -102,7 +104,13 @@ int main(int argc, char **argv) {
         padCanvas = SDL_CreateRGBSurfaceWithFormat(0, PAD_W, PAD_H, 32, SDL_PIXELFORMAT_RGBA32);
         padRen = SDL_CreateSoftwareRenderer(padCanvas);
     } else {
+        save_load_settings();   /* Options > Screens is read before the windows exist */
+        int mirror = save.screens || getenv("MM_ONE_WINDOW");
 #ifdef __WIIU__   /* SDL_WINDOW_WIIU_* are enum values, not macros: "#if defined(SDL_WINDOW_WIIU_TV_ONLY)" was always false */
+        if (mirror) {   /* off-TV play: one window, the same picture on the TV and the GamePad */
+            win = SDL_CreateWindow("Midnight Matinee", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_W, SCREEN_H, SDL_WINDOW_SHOWN);
+            ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+        } else {
         /* two windows: the TV, and the GamePad with its own picture (the security office) */
         win = SDL_CreateWindow("Midnight Matinee", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_W, SCREEN_H,
                                SDL_WINDOW_SHOWN | SDL_WINDOW_WIIU_TV_ONLY | SDL_WINDOW_WIIU_PREVENT_SWAP);
@@ -118,11 +126,12 @@ int main(int argc, char **argv) {
             win = SDL_CreateWindow("Midnight Matinee", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_W, SCREEN_H, SDL_WINDOW_SHOWN);
             ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
         }
+        }
 #else
         win = SDL_CreateWindow("Midnight Matinee (TV)", 40, 60, SCREEN_W, SCREEN_H, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
         ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
         if (!ren) ren = SDL_CreateRenderer(win, -1, 0);
-        if (!getenv("MM_ONE_WINDOW")) {   /* on PC the GamePad screen gets its own window */
+        if (!mirror) {   /* on PC the GamePad screen gets its own window */
             padWin = SDL_CreateWindow("Midnight Matinee (GamePad)", 60 + SCREEN_W / 2, 120, PAD_W, PAD_H, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
             if (padWin) padRen = SDL_CreateRenderer(padWin, -1, 0);
         }
@@ -170,7 +179,7 @@ int main(int argc, char **argv) {
                 for (int i = 0; i < MAX_PADS; i++) if (c && gc[i] == c) { SDL_GameControllerClose(c); gc[i] = NULL; game_controller_lost(); }
             }
             /* GamePad touch screen (and the mouse on the PC GamePad window) */
-            if (ev.type == SDL_FINGERDOWN) game_touch(ev.tfinger.x, ev.tfinger.y);
+            if (ev.type == SDL_FINGERDOWN && padRen) game_touch(ev.tfinger.x, ev.tfinger.y);
             if (ev.type == SDL_MOUSEBUTTONDOWN && padWin && ev.button.windowID == SDL_GetWindowID(padWin)) {
                 int w, h; SDL_GetWindowSize(padWin, &w, &h);
                 if (w > 0 && h > 0) game_touch(ev.button.x / (float)w, ev.button.y / (float)h);

@@ -9,4 +9,7 @@ void audio_quit(void);
 void audio_set_volume(int music, int sfx);   /* 0..10 each */
 void audio_duck(int on);                     /* quieter music while paused */
 int music_available(const char *name);
+int voice_play(const char *name);          /* vo/<name>.wav on the voice channel; replaces any voice already talking */
+void voice_stop(void);
+int voice_playing(void);
 #endif
