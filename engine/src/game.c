@@ -24,7 +24,7 @@ static float signf(float v) { return v < 0 ? -1.0f : 1.0f; }
 
 /* ------------------------------------------------------------ assets */
 #define HERO_FRAMES 8
-typedef struct { Tex hero[3][HERO_FRAMES]; Tex usher[5], dog[5], blob[4], inky[3], gore[12], goat[5], meat[5], slice[5], rat[3], gore2[12], bg2; Tex bg, disc, vignette, mask, grain[4]; Font font, small; } Assets;
+typedef struct { Tex hero[3][HERO_FRAMES]; Tex usher[5], dog[5], blob[4], inky[3], gore[12], goat[5], meat[5], slice[5], rat[5], cleaver, gore2[12], bg2; Tex bg, disc, vignette, mask, grain[4]; Font font, small; } Assets;
 static Assets A;
 static Font padFont, padSmall; static Tex padDisc;
 
@@ -425,7 +425,8 @@ void game_init(void) {
         snprintf(rel, sizeof rel, "chars/meat_%d.png", i); A.meat[i] = load_or_empty(rel); if (!A.meat[i].tex && i) A.meat[i] = A.meat[0];
         snprintf(rel, sizeof rel, "chars/slice_%d.png", i); A.slice[i] = load_or_empty(rel); if (!A.slice[i].tex && i) A.slice[i] = A.slice[0];
     }
-    for (int i = 0; i < 3; i++) { snprintf(rel, sizeof rel, "chars/rat_%d.png", i); A.rat[i] = load_or_empty(rel); }
+    for (int i = 0; i < 5; i++) { snprintf(rel, sizeof rel, "chars/rat_%d.png", i); A.rat[i] = load_or_empty(rel); }
+    A.cleaver = load_or_empty("chars/cleaver.png");
     A.bg2 = load_or_empty("bg/pizza.jpg");
     for (int i = 0; i < 3; i++) { snprintf(rel, sizeof rel, "chars/inky_%d.png", i); A.inky[i] = load_or_empty(rel); }
     A.bg = load_or_empty("bg/theater.jpg");
@@ -961,7 +962,7 @@ static void update_boss_rat(void) {
     switch (boss.state) {
     case BS_INTRO: boss.pose = 0; if (boss.timer <= 0) { boss.state = BS_IDLE; boss.timer = 1.0f; } break;
     case BS_IDLE:
-        boss.pose = angry < 1 ? 2 : 0; boss.bob = fabsf(sinf(boss.t * 6)) * -10;
+        boss.pose = angry < 1 ? 4 : 0; boss.bob = fabsf(sinf(boss.t * 6)) * -10;
         if (t) { float want = t->x - boss.face * 380; boss.x += clampf(want - boss.x, -1, 1) * 110 / angry * DT; }
         boss.x = clampf(boss.x, lo, hi);
         if (boss.timer <= 0) {
@@ -969,7 +970,7 @@ static void update_boss_rat(void) {
             if (pick_ == 0) { boss.state = RS_CHOP_AIM; boss.slams = angry < 1 ? 3 : 2; boss.timer = 0.8f * angry; boss.targetx = t ? t->x : boss.x; }
             else if (pick_ == 1) { boss.state = RS_PIZZA; boss.slams = 3; boss.timer = 0.3f; }
             else if (pick_ == 2) { boss.state = RS_WAVE_WARN; boss.timer = 0.8f * angry; sfx("charge"); }
-            else { boss.state = RS_LEAP; boss.vy = -1500; sfx("jump"); }
+            else { boss.state = RS_LEAP; boss.vy = -2100; sfx("jump"); }
             if (angry < 1 && !boss.summoned) { boss.summoned = 1; spawn(E_MEATBALL, (int)((ARENA_X + 200) / TILE), 13); spawn(E_MEATBALL, (int)((ARENA_X + 900) / TILE), 13); sfx("summon"); }
         }
         break;
@@ -981,12 +982,12 @@ static void update_boss_rat(void) {
             for (int k = 0; k < 8; k++) part_k(PK_DEBRIS, boss.targetx, FLOOR_Y - 8, (frand() - 0.5f) * 700, -300 - frand() * 500, 2.0f, 8 + frand() * 10, 1700, 110, 70, 40, 0); }
         break;
     case RS_CHOP:
-        boss.pose = 1; boss_hit_player_box(boss.targetx, FLOOR_Y, 110, FLOOR_Y);
+        boss.pose = 2; boss_hit_player_box(boss.targetx, FLOOR_Y, 110, FLOOR_Y);
         if (boss.timer <= 0) { if (--boss.slams > 0) { boss.state = RS_CHOP_AIM; boss.timer = 0.55f * angry; boss.targetx = t ? t->x : boss.targetx; }
             else { boss.state = BS_IDLE; boss.timer = 1.3f * angry; } }
         break;
     case RS_PIZZA:      /* flings pizzas that bounce along the floor */
-        boss.pose = 0;
+        boss.pose = boss.timer > 0.5f * angry - 0.22f && boss.slams < 3 ? 3 : 0;
         if (boss.timer <= 0) {
             Proj *q = proj(P_PIZZA, boss.x + boss.face * 120, boss.y - 260, boss.face * (330 + 70 * boss.slams), -520, 1, 1);
             if (q) { q->grav = 1400; q->r = 26; q->bounces = 4; q->life = 4; }
@@ -1002,11 +1003,11 @@ static void update_boss_rat(void) {
         if (boss.sweepx < ARENA_X - 60 || boss.sweepx > ARENA_X + SCREEN_W + 60) { boss.state = BS_IDLE; boss.timer = 1.1f * angry; }
         break;
     case RS_LEAP:       /* jumps off the top of the screen... */
-        boss.pose = 2; boss.vy += 1800 * DT; boss.y += boss.vy * DT;
-        if (boss.y < -200) { boss.state = RS_FALL; boss.timer = 1.0f; boss.targetx = t ? t->x : boss.x; boss.vy = 0; }
+        boss.pose = 4; boss.vy += 1800 * DT; boss.y += boss.vy * DT;
+        if (boss.y < -200 || (boss.vy > 0 && boss.y > -60)) { boss.state = RS_FALL; boss.timer = 1.0f; boss.targetx = t ? t->x : boss.x; boss.vy = 0; }
         break;
     case RS_FALL:       /* ...and crashes down where you were standing */
-        boss.pose = 2;
+        boss.pose = 4;
         if (boss.timer > 0.25f && t) boss.targetx += (t->x - boss.targetx) * 0.06f;
         if (boss.timer <= 0) {
             boss.x = clampf(boss.targetx, lo, hi); boss.vy += 3200 * DT; boss.y += boss.vy * DT;
@@ -1018,12 +1019,12 @@ static void update_boss_rat(void) {
         }
         break;
     case BS_DEAD:
-        if (boss.pose >= 0) boss.pose = 2;
+        if (boss.pose >= 0) boss.pose = 4;
         if (frame_no % 4 == 0) { sfx("boom"); blood_spurt(boss.x + (frand() - 0.5f) * 200, boss.y - frand() * 300, frand() < 0.5f ? -1 : 1, 10, 700);
             gore_part2(rand() % 12, boss.x + (frand() - 0.5f) * 200, boss.y - 100 - frand() * 250, 700, rand() & 1);
             for (int k = 0; k < 6; k++) part_k(PK_BLOOD, boss.x, boss.y - 200, (frand() - 0.5f) * 800, -300 - frand() * 500, 1.4f, 6, 1500, 250, 190, 60, 0); }
         if (!boss.summoned && boss.timer < 1.0f) {
-            boss.summoned = 1; shatter(&A.rat[2], boss.x, boss.y + 10, boss.face > 0, 5, 5, 800, 1); boss.pose = -1;
+            boss.summoned = 1; shatter(&A.rat[4], boss.x, boss.y + 10, boss.face > 0, 5, 5, 800, 1); boss.pose = -1;
             for (int k = 0; k < 6; k++) gore_part2(11, boss.x, boss.y - 200, 800, 1);
             gore_part2(3, boss.x - 20, boss.y - 330, 900, 1); gore_part2(3, boss.x + 20, boss.y - 330, 900, 1);
             blood_spurt(boss.x, boss.y - 250, -1, 60, 900); blood_spurt(boss.x, boss.y - 250, 1, 40, 800);
@@ -1039,11 +1040,11 @@ static void draw_boss_rat(float ox, float oy) {
     if (boss.state == RS_CHOP_AIM) { float k = 1 - boss.timer / 0.8f, tx = sx(boss.targetx) + ox;
         draw_ellipse(&A.disc, tx, FLOOR_Y + oy, 40 + 30 * k, 9 + 6 * k, 10, 6, 10, (Uint8)(120 + 120 * k));
         if ((frame_no / 4) % 2) draw_text_col(&A.small, "!", tx, FLOOR_Y + oy - 60, 0.8f, 1, 255, 60, 40, 255); }
-    if (boss.state == RS_CHOP) { float tx = sx(boss.targetx) + ox;   /* a giant cleaver blade */
-        fill_rect((int)tx - 55, 0, 110, FLOOR_Y + (int)oy - 10, 40, 36, 40, 255);
-        fill_rect((int)tx - 50, 0, 100, FLOOR_Y + (int)oy - 16, 190, 196, 205, 255);
-        fill_rect((int)tx - 50, FLOOR_Y + (int)oy - 34, 100, 18, 235, 240, 245, 255);
-        draw_ellipse(&A.disc, tx + 20, 60 + oy, 12, 12, 40, 36, 40, 255); }
+    if (boss.state == RS_CHOP) { float tx = sx(boss.targetx) + ox;   /* his cleaver, giant, slams down blade-first */
+        float k = clampf((0.3f - boss.timer) / 0.06f, 0, 1), h = A.cleaver.h ? (float)A.cleaver.h : 300;
+        float cy = -h + (FLOOR_Y + oy + 16) * k;   /* bottom edge reaches the floor */
+        if (A.cleaver.tex) draw_tex_srcx(&A.cleaver, NULL, tx - A.cleaver.w * 0.5f, cy, (float)A.cleaver.w, h, boss.face < 0, 0, 255, 255, 255, 255);
+        else { fill_rect((int)tx - 50, 0, 100, FLOOR_Y + (int)oy - 16, 190, 196, 205, 255); } }
     if (boss.state == RS_FALL && boss.timer > 0) { float k = 1 - boss.timer, tx = sx(boss.targetx) + ox;
         draw_ellipse(&A.disc, tx, FLOOR_Y + oy, 60 + 120 * k, 12 + 12 * k, 10, 6, 10, (Uint8)(100 + 140 * k)); }
     if (boss.state == RS_WAVE_WARN && (frame_no / 5) % 2) draw_glow(&A.disc, x + boss.face * 120, FLOOR_Y + oy - 30, 70, 255, 200, 80, 255);
