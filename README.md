@@ -144,6 +144,13 @@ PC test build: `cmake -B build_pc && cmake --build build_pc && ./build_pc/midnig
 second window and you can click it). Headless tests: see the top of `engine/src/main.c`.
 
 ## Art and music
+**Backgrounds:** every show has six hand-painted zone backgrounds (one per area, 48 in all) that crossfade as you walk
+from one area into the next, a foreground layer of silhouettes that slides past in front of the action, and a painted
+ground texture for floors and walls. They live in `engine/content/bg/<show>/` (`z0-5.jpg`, `fg.png`, `ground.jpg`), are
+stored at 1080p, and only the current show's art is loaded (`load_show_art`), so memory stays flat as the game grows.
+`tools/process_bg.py` turns the Runway paintings into those files (resize, key the foreground, even out and wrap the
+ground texture).
+
 Characters, the boss and the background are Runway paintings on flat green, cut by `tools/cut_sprites.py`
 (sources in `art/refs`).
 

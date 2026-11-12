@@ -130,6 +130,7 @@ int main(int argc, char **argv) {
     game_init();
     if (padRen) { gfx_set_renderer(padRen); game_init_pad(); gfx_set_renderer(ren); }
     const char *sc = getenv("MM_SCENE"); if (sc) game_goto(sc);
+    if (getenv("MM_CP")) game_set_checkpoint(atoi(getenv("MM_CP")));
     const char *sp = getenv("MM_SCRIPT"); if (sp) load_script(sp, 0);
     const char *sp2 = getenv("MM_SCRIPT2"); if (sp2) load_script(sp2, 1);
     const char *shots = getenv("MM_SHOTS");

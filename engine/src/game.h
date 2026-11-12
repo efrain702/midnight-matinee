@@ -9,7 +9,8 @@ void game_init_pad(void);             /* GamePad renderer is current: load its o
 /* advance one fixed 1/60 s step. pads[0] is the Wii U GamePad (keyboard on PC), pads[1..3] other controllers;
    connected[i] says which are plugged in */
 void game_step(const Input pads[MAX_PADS], const int connected[MAX_PADS]);
-void game_check(long frame);   /* tests */
+void game_check(long frame);
+void game_set_checkpoint(int c);   /* tests: MM_CP */   /* tests */
 void game_draw(void);                 /* the TV picture */
 void game_draw_pad(void);             /* the GamePad picture (security office) */
 void game_touch(float x, float y);    /* a tap on the GamePad screen, 0..1 */

@@ -80,6 +80,7 @@ static int loop_no;   /* 0 = first run, 1 = the harder second run (beat it for t
 static int level_no;
 static const char *const *ZONE_NAME = LEVELS[0].zone;
 static const int *ZONE_X0 = LEVELS[0].x0;
+static Tex zbg[6], zfg, zground; static int zart_show = -1;   /* the current show's art (see load_show_art) */
 static int zone_of(float x) { int tx = (int)(x / TILE); for (int z = 0; z < 6; z++) if (tx < ZONE_X0[z + 1]) return z; return 5; }
 
 static void put(int x, int y, char c) { if (x >= 0 && x < LW && y >= 0 && y < LH) map[y][x] = c; }
@@ -544,8 +545,9 @@ static void reset_player(Player *p, int full) {
     if (full) { p->lives = 3; p->weapon = getenv("MM_WEAPON") ? atoi(getenv("MM_WEAPON")) % NWEAP : W_NAIL; }
 }
 
+static void load_show_art(void);
 static void start_level(void) {
-    build_level();
+    build_level(); load_show_art();
     memset(pr, 0, sizeof pr); memset(parts, 0, sizeof parts); memset(pick, 0, sizeof pick);
     memset(gibs, 0, sizeof gibs); memset(splats, 0, sizeof splats); memset(rings, 0, sizeof rings); hitstop = 0;
     memset(&fiend, 0, sizeof fiend); memset(&boss, 0, sizeof boss); memset(lit, 0, sizeof lit);
@@ -2675,7 +2677,15 @@ static void draw_tiles(float ox, float oy) {
     for (int ty = 0; ty < LH; ty++) for (int tx = t0; tx <= t1; tx++) {
         if (tx < 0 || tx >= LW) continue;
         char c = map[ty][tx]; float x = sx(tx * TILE) + ox, y = ty * TILE + oy;
-        if (c == '#' && level_no == 3) {   /* ink works: riveted iron */
+        if (c == '#' && zground.tex) {   /* painted ground texture, mapped in world space so it tiles across blocks */
+            const int span = 192; int top = ty == 0 || map[ty - 1][tx] != '#';
+            int wx = (tx * TILE) % span, wy = (ty * TILE) % span;
+            SDL_Rect src = {wx * zground.w / span, wy * zground.h / span, TILE * zground.w / span, TILE * zground.h / span};
+            draw_tex_src(&zground, &src, x, y, TILE, TILE, 255);
+            if (top && ty > 0) { fill_rect((int)x, (int)y, TILE, 4, 255, 236, 200, 70); fill_rect((int)x, (int)y + 4, TILE, 3, 0, 0, 0, 110); }
+            if (map[ty][tx > 0 ? tx - 1 : 0] != '#') fill_rect((int)x, (int)y, 3, TILE, 0, 0, 0, 120);
+            if (tx < LW - 1 && map[ty][tx + 1] != '#') fill_rect((int)x + TILE - 3, (int)y, 3, TILE, 0, 0, 0, 120);
+        } else if (c == '#' && level_no == 3) {   /* ink works: riveted iron */
             int top = ty == 0 || map[ty - 1][tx] != '#';
             fill_rect((int)x, (int)y, TILE, TILE, 54, 46, 40, 255);
             fill_rect((int)x, (int)y, 2, TILE, 30, 26, 22, 255); fill_rect((int)x, (int)y + TILE - 2, TILE, 2, 30, 26, 22, 255);
@@ -3192,17 +3202,61 @@ static void draw_dark(void) {
         draw_glow(&A.disc, ex - 7, ey, 12, 255, 170, 40, 255); draw_glow(&A.disc, ex + 7, ey, 12, 255, 170, 40, 255); }
 }
 
+/* ---- per-show art: a painting for each of the six zones, a foreground layer and a ground texture.
+   Loaded when a show starts and freed when you leave it, so only one show's art is ever in memory. */
+static const char *SHOW_DIR[NUM_LEVELS] = {"lobby", "pizza", "reels", "ink", "lost", "mirrors", "roof", "encore"};
+static const float SHOW_K[NUM_LEVELS] = {1.0f, 1.0f, 1.12f, 1.12f, 1.12f, BG7_K, BG8_K, 1.03f};   /* painted floor height */
+static void load_show_art(void) {
+    if (zart_show == level_no) return;
+    Uint32 t0 = SDL_GetTicks();
+    for (int i = 0; i < 6; i++) tex_free(&zbg[i]);
+    tex_free(&zfg); tex_free(&zground);
+    char rel[96];
+    for (int i = 0; i < 6; i++) { snprintf(rel, sizeof rel, "bg/%s/z%d.jpg", SHOW_DIR[level_no], i); zbg[i] = tex_load(rel); }
+    snprintf(rel, sizeof rel, "bg/%s/fg.png", SHOW_DIR[level_no]); zfg = tex_load(rel);
+    snprintf(rel, sizeof rel, "bg/%s/ground.jpg", SHOW_DIR[level_no]); zground = tex_load(rel);
+    zart_show = level_no;
+    SDL_Log("show %d art loaded in %u ms", level_no + 1, SDL_GetTicks() - t0);
+}
+static void draw_painting(Tex *t, float k, float ox, Uint8 a) {   /* one zone painting, tiled with parallax */
+    float h = SCREEN_H * k, w = t->w * (h / t->h), par = camx * 0.35f, off = -fmodf(par, w);
+    for (float x = off; x < SCREEN_W; x += w) draw_tex(t, x + ox * 0.3f, 0, w + 1, h, 0, a);
+}
+static int draw_zone_paintings(float ox) {
+    float k = SHOW_K[level_no], c = camx + SCREEN_W / 2;
+    int z = zone_of(c);
+    if (!zbg[z].tex) return 0;
+    /* crossfade across zone boundaries */
+    for (int b = 1; b < 6; b++) { float d = c - ZONE_X0[b] * TILE;
+        if (fabsf(d) < 360 && zbg[b - 1].tex && zbg[b].tex) {
+            draw_painting(&zbg[b - 1], k, ox, 255);
+            draw_painting(&zbg[b], k, ox, (Uint8)(255 * clampf((d + 360) / 720, 0, 1)));
+            return 1; } }
+    draw_painting(&zbg[z], k, ox, 255);
+    return 1;
+}
+static void draw_foreground(float ox) {   /* silhouettes sliding past in front: the top band hangs down, the bottom band only peeks in */
+    if (!zfg.tex) return;
+    float w = zfg.w * ((float)SCREEN_H / zfg.h), off = -fmodf(camx * 1.3f, w);
+    int half = zfg.h / 2;
+    for (float x = off; x < SCREEN_W; x += w) {
+        SDL_Rect top = {0, 0, zfg.w, half}, bot = {0, half, zfg.w, zfg.h - half};
+        draw_tex_src(&zfg, &top, x + ox * 1.3f, 0, w + 1, SCREEN_H / 2.0f, 235);
+        draw_tex_src(&zfg, &bot, x + ox * 1.3f, SCREEN_H / 2.0f + 104, w + 1, SCREEN_H / 2.0f, 175);   /* low enough that pits stay readable */
+    }
+}
 static void draw_bg(float ox) {
     Tex *bgs[NUM_LEVELS] = {&A.bg, &A.bg2, &A.bg3, &A.bg4, &A.bg5, &A.bg7, &A.bg8, &A.bg6};
     Tex *bgt = bgs[level_no]->tex ? bgs[level_no] : &A.bg;
-    if (bgt->tex) {
+    if (draw_zone_paintings(ox)) {}
+    else if (bgt->tex) {
         float k = (bgt == &A.bg3 || bgt == &A.bg4 || bgt == &A.bg5) ? 1.12f : bgt == &A.bg6 ? 1.03f : bgt == &A.bg7 ? BG7_K : bgt == &A.bg8 ? BG8_K : 1.0f;   /* the cartoon reel's painted floor sits higher: scale it down to ours */
         float par = camx * 0.35f; float w = bgt->w * k;
         float off = -fmodf(par, w);
         for (float x = off; x < SCREEN_W; x += w) draw_tex(bgt, x + ox * 0.3f, 0, w, SCREEN_H * k, 0, 255);
     } else fill_rect(0, 0, SCREEN_W, SCREEN_H, 60, 40, 30, 255);
     Uint8 dim = (Uint8)(110 - power * 0.6f);   /* the theatre dims as the power runs down */
-    fill_rect(0, 0, SCREEN_W, SCREEN_H, 16, 8, 6, (Uint8)(70 + dim));
+    fill_rect(0, 0, SCREEN_W, SCREEN_H, 16, 8, 6, (Uint8)((zbg[0].tex ? 40 : 70) + dim));
     int cz = zone_of(camx + SCREEN_W / 2);
     if (lit[cz] > 0) fill_rect(0, 0, SCREEN_W, SCREEN_H, 255, 230, 170, (Uint8)(30 * fminf(1, lit[cz])));
 }
@@ -3303,6 +3357,7 @@ void game_draw(void) {
     draw_proj(ox, oy);
     draw_parts(ox, oy);
     draw_storm_front(ox, oy);
+    draw_foreground(ox);
     if (negative_t > 0) {   /* the film skips: flashes of overexposed white and black frames */
         int f = (frame_no / 2) % 3;
         if (f == 0) fill_rect(0, 0, SCREEN_W, SCREEN_H, 250, 248, 240, 150); else if (f == 1) fill_rect(0, 0, SCREEN_W, SCREEN_H, 0, 0, 0, 120);
@@ -3470,6 +3525,7 @@ void game_draw_pad(void) {
 }
 
 /* ---- test watchdog (MM_CHECK): reports impossible states during scripted runs ---- */
+void game_set_checkpoint(int c) { if (c >= 0 && c < ncheck) { cur_check = c; reset_player(&pl[0], 0); camx = clampf(pl[0].x - SCREEN_W * 0.35f, 0, LW * TILE - SCREEN_W); } }   /* tests */
 void game_check(long frame) {
     static int stuck[2], fallen[2], reported = 0;
     if (reported > 40) return;
