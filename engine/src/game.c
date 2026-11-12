@@ -387,7 +387,7 @@ static void fire(Player *p) {
     case W_NAIL: proj(P_NAIL, mx, my, dx * 1150, dy * 1150, 0, 1); p->cool = 0.11f; sfx("throw"); break;
     case W_RIVET:
         for (int k = -1; k <= 1; k++) { float a = atan2f(dy, dx) + k * 0.2f; Proj *q = proj(P_RIVET, mx, my, cosf(a) * 950, sinf(a) * 950, 0, 1); if (q) q->r = 9; }
-        p->cool = 0.24f; sfx("throw"); break;
+        p->cool = 0.24f; sfx("rivet"); break;
     case W_TORCH: {
         float a = atan2f(dy, dx) + (frand() - 0.5f) * 0.25f;
         Proj *q = proj(P_FLAME, mx, my, cosf(a) * 720, sinf(a) * 720, 0, 1); if (q) { q->life = 0.24f; q->r = 16; }
@@ -418,11 +418,11 @@ static void update_player(Player *p, const Input *in) {
     /* hiding in a prop closet */
     int ctx = (int)(p->x / TILE);
     if (p->hidden) {
-        if ((pr_ & (B_UP | B_JUMP | B_DOWN))) { p->hidden = 0; p->inv = 0.4f; sfx("menu"); }
+        if ((pr_ & (B_UP | B_JUMP | B_DOWN))) { p->hidden = 0; p->inv = 0.4f; sfx("closet"); }
         return;
     }
     if ((pr_ & B_UP) && p->onground && map[12][ctx] == 'C') {
-        p->hidden = 1; p->closet_tx = ctx; p->x = ctx * TILE + TILE / 2; p->vx = 0; sfx("menu");
+        p->hidden = 1; p->closet_tx = ctx; p->x = ctx * TILE + TILE / 2; p->vx = 0; sfx("closet");
         message("HIDING... (UP TO COME OUT)", 1.2f); return;
     }
     /* flip a breaker */
@@ -504,6 +504,7 @@ static void gore_enemy(Enemy *e) {
     Tex *t = enemy_tex(e);
     switch (e->type) {
     case E_USHER:   /* porcelain doll: head cracks open, arms fly, oil-blood everywhere */
+        sfx("shatter");
         shatter(t, e->x, e->y, e->face > 0, 3, 4, 420, 1);
         gore_part(2, cx, cy - 60, 520, 0); gore_part(2, cx, cy - 60, 480, 0); gore_part(3, cx, cy - 70, 600, 1);
         gore_part(3, cx, cy - 70, 560, 1); gore_part(4, cx, cy - 20, 500, 1); gore_part(4, cx, cy - 20, 460, 1);
@@ -515,9 +516,10 @@ static void gore_enemy(Enemy *e) {
         gore_part(6, cx, cy, 600, 0); gore_part(0, cx, cy, 560, 0); gore_part(0, cx, cy, 520, 0); gore_part(1, cx, cy, 540, 0);
         gore_part(7, cx, cy, 500, 0); gore_part(5, cx, cy, 460, 1); gore_part(3, cx, cy - 20, 580, 1);
         blood_spurt(cx, cy, -e->face, 26, 560); spark_burst(cx, cy, 24, 255, 210, 110); smoke(cx, cy, 8, 70);
-        ring(cx, cy, 110, 255, 220, 150); sfx("boom");
+        ring(cx, cy, 110, 255, 220, 150); sfx("boom"); sfx("clank");
         break;
     default:        /* ink blob: bursts into a big ink splash that paints the room */
+        sfx("splat");
         shatter(t, e->x, e->y, e->face > 0, 2, 2, 300 * k, 0);
         for (int i = 0; i < (int)(30 * k); i++) { float a = frand() * 6.283f, v = 200 + frand() * 450;
             part_k(PK_BLOOD, cx, e->y - 30 * k, cosf(a) * v, sinf(a) * v - 250, 1.4f, 4 + frand() * 8 * k, 1500, 12, 8, 12, 0); }
@@ -590,7 +592,7 @@ static void update_enemies(void) {
                 if (t && fabsf(t->x - e->x) < 620 && fabsf(t->y - e->y) < 170 && e->timer <= 0) {
                     e->state = 1; e->timer = 0.9f / speed_k; e->face = t->x < e->x ? -1 : 1; e->vx = 0; sfx("charge"); }
             } else if (e->state == 1) {              /* lens warming up */
-                e->vx = 0; e->timer -= DT; if (e->timer <= 0) { e->state = 2; e->timer = 0.45f; sfx("power"); }
+                e->vx = 0; e->timer -= DT; if (e->timer <= 0) { e->state = 2; e->timer = 0.45f; sfx("beam"); }
             } else if (e->state == 2) {              /* projector beam */
                 e->timer -= DT;
                 float bx0 = e->x + e->face * 50, by = e->y - 76;
@@ -637,7 +639,7 @@ static void update_fiend(void) {
         if (!in_zone) return;
         fiend.cycle -= DT;
         if (!fiend.seen) { fiend.seen = 1; fiend.cycle = 3.5f; message("SOMETHING IS MOVING BACKSTAGE...", 2.5f); }
-        if (fiend.cycle <= 0) { fiend.state = 1; fiend.t = 1.8f; warn_t = 1.8f; sfx("thunder"); }
+        if (fiend.cycle <= 0) { fiend.state = 1; fiend.t = 1.8f; warn_t = 1.8f; sfx("fiendwarn"); }
         return;
     }
     if (fiend.state == 1) {
@@ -727,7 +729,7 @@ static void update_boss(void) {
         }
         break;
     case BS_SWEEP_WARN:
-        boss.pose = 0; if (boss.timer <= 0) { boss.state = BS_SWEEP; boss.sweepx = boss.x - 140; sfx("power"); } break;
+        boss.pose = 0; if (boss.timer <= 0) { boss.state = BS_SWEEP; boss.sweepx = boss.x - 140; sfx("beam"); } break;
     case BS_SWEEP:
         boss.sweepx -= 760 / angry * DT;
         if (frame_no % 2 == 0) part(boss.sweepx, FLOOR_Y - 6, (frand() - 0.5f) * 200, -150 - frand() * 250, 0.4f, 4, 900, 255, 230, 150, 1);
@@ -830,6 +832,7 @@ static void update_proj(void) {
                     int floor = q->vy > 0 && !solid_at(tx, (int)((q->y - 14) / TILE));
                     splat(q->x, floor ? ty * TILE + 2 : q->y, q->size * 1.2f + 2, floor, q->r, q->g, q->b); q->life = 0;
                 } else {                     /* casings and splinters bounce and settle */
+                    if (q->kind == PK_CASING && q->vy > 300 && rand() % 4 == 0 && q->x > camx && q->x < camx + SCREEN_W) sfx("casing");
                     q->y = ty * TILE - 1; q->vy *= -0.35f; q->vx *= 0.6f; q->vang *= 0.5f;
                     if (fabsf(q->vy) < 60) { q->vy = 0; q->grav = 0; q->vx = 0; q->vang = 0; }
                 }
@@ -870,7 +873,7 @@ static void op_ping(void) {
 }
 static void op_lights(void) {
     if (power < 10 || lit[cam_sel] > 0) { sfx("tick"); return; }
-    power -= 10; lit[cam_sel] = 8.0f; sfx("power"); cam_flash = 0.4f;
+    power -= 10; lit[cam_sel] = 8.0f; sfx("lights"); cam_flash = 0.4f;
     char b[48]; snprintf(b, sizeof b, "LIGHTS UP: %s", ZONE_NAME[cam_sel]); message(b, 1.4f);
 }
 static void auto_camera(void) {   /* nobody on the cameras for a while: follow the action */

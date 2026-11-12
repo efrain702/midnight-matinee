@@ -9,8 +9,9 @@ static int ok = 0; static int vol_music = 8, vol_sfx = 8, ducked = 0;
 static void apply_volume(void);
 static Mix_Music *cur = NULL;
 static char cur_name[64];
-static const char *SFX[] = {"jump", "throw", "hit", "hurt", "boom", "slam", "pickup", "checkpoint", "splash", "sizzle",
-    "menu", "poof", "charge", "power", "summon", "angry", "tick", "star", "stomp", "spit", "roar1", "roar2", "boing", "coin", "thunder", "heart"};
+static const char *SFX[] = {"jump", "throw", "rivet", "sizzle", "boing", "hit", "hurt", "boom", "slam", "pickup", "checkpoint",
+    "splash", "menu", "poof", "shatter", "clank", "charge", "power", "beam", "summon", "angry", "tick", "spit", "roar1", "roar2",
+    "coin", "thunder", "casing", "lights", "closet", "fiendwarn", "splat"};
 #define NSFX (int)(sizeof SFX / sizeof *SFX)
 static Mix_Chunk *chunks[NSFX];
 

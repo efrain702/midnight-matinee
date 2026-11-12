@@ -75,3 +75,9 @@ leave stains. Blood and ink stay splattered on the floor and walls. The welding 
 burst, nails spark, casings fly, big hits freeze the action for a few frames, and Uncle Inky's slams send out
 shockwaves and splinters. When he dies he blows apart in stages, then shatters, mask and all.
 Test switches: `MM_WEAPON=0..3` (starting weapon), `MM_BOSS_HP=n` (boss starting health).
+
+## Sound effects
+32 custom effects generated in Runway (`engine/content/sfx`, loudness-matched WAVs): nail gun, rivet blast, welding
+torch, plunger thwonk, hits, worker "oof" with a slide whistle, porcelain shatter, gear clatter, ink splats, gory
+bursts, casing tinks, projector wind-up and beam, breaker clunk, stage lights, power failure, closet door, Ink Fiend
+roar and warning stinger, tentacle slam, Uncle Inky's angry roar and dying wail, ghost-light checkpoint and organ UI blips.
